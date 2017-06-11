@@ -19,3 +19,6 @@ A detailed user manual in PDF is available from the releases page.
 No dependencies are needed. 
 
 # Current Version
+
+
+This work was supported by a PROMETEO postdoctoral grant.
