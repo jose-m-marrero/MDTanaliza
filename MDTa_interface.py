@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-#import Tkinter as tk
 import os
 import sys
 from Tkinter import *
@@ -9,16 +8,16 @@ from Tkinter import Tk, Frame, BOTH
 import Tkconstants, tkFileDialog
 from tkMessageBox import showerror, showinfo, askyesno
 import numbers
-#from ttk import Frame, Button, Style
-#from tkinter import ttk  # Carga ttk (para widgets nuevos 8.5+)
-#from tkFileDialog   import askopenfilename
 
 
 """
-Copyright (C) 2015, 2017  Jose M. Marrero <josemarllin@gmail.com> and Ramon Ortiz <ramonortizramis@gmail.com>
-Distributed under the terms of the MIT License.
+* Copyright (C) 2009-2017  Jose M. Marrero <josemarllin@gmail.com> and Ramon Ortiz <ramonortizramis@gmail.com>
+* You may use, distribute and modify this code under the terms of the MIT License.
+* The authors will not be held responsible for any damage or losses or for any implications 
+* whatsoever resulting from downloading, copying, compiling, using or otherwise handling this 
+* source code or the program compiled.
 Code name: MDTanaliza GUI
-Version: 2.1-2017-07-04
+Version: 2.1-2018-04-06
 Execute command line:  ./MDTa_interface.py
 Authors: Jose M. Marrero (1) R. Ortiz Ramis (2)
 Affiliation 1: REPENSAR
@@ -43,7 +42,6 @@ class Example(Frame):
 		if self.LAN < 1 or self.LAN > 2:
 			print "Atencion, el numero asignado al lenguage debe estar entre 1 o 2"
 			sys.exit()
-		#self.callback()
 		self.initUI()   
 	#CHAGE LANGUAGE
 	def chalangen2sp(self):
@@ -158,7 +156,7 @@ class Example(Frame):
 			self.sloplab.config(bg="yellow", foreground="blue", text=self.txtchk11h)	
 		if valslo == 9:
 			self.sloplab.config(bg="yellow", foreground="blue", text=self.txtchk11i)			
-						
+					
 		#TRAYECTO
 		#algor = int(self.npt.get()) 
 		algor = int(self.tratip.get())
@@ -171,6 +169,8 @@ class Example(Frame):
 			self.rad.config(state=DISABLED)
 			self.incre.delete(0,END)
 			self.incre.config(state=DISABLED)
+			self.force.set("0")                               #<-------------
+			self.forceval.config(state=DISABLED)              #<-------------
 			self.itera.delete(0,END)
 			self.itera.config(state=DISABLED)
 			self.npt.delete(0,END)
@@ -179,8 +179,16 @@ class Example(Frame):
 			self.T.config(state=DISABLED)
 			self.loadnpt.config(state=DISABLED)
 			self.labalgtyp.config(text=self.txtlab18)
+			self.mod.set("0")                               #<-------------
+			self.modval.config(state=DISABLED)              #<-------------
+			#self.mod.delete(0,END)
+			#self.mod.config(state=DISABLED)
 			self.huso.config(state=DISABLED)
-			self.hemis.config(state=DISABLED)
+			
+			self.labhemis.config(bg="#d9d9d9", foreground="black", text=self.txtlab19) #<-------------
+			self.hemis.set("0")	                                                       #<-------------
+			self.hemisval.config(state=DISABLED)                                       #<-------------
+			#self.hemis.config(state=DISABLED)                                         #<-------------
 		#activado
 		if(algor > 0):
 			self.dismax.config(state=NORMAL)
@@ -188,32 +196,45 @@ class Example(Frame):
 			self.npt.config(state=NORMAL)
 			self.T.config(state=NORMAL)
 			self.loadnpt.config(state=NORMAL)
+			#self.mod.config(state=NORMAL)
+			self.modval.config(state="readonly")                        #<-------------
 			self.huso.config(state=NORMAL)
-			self.hemis.config(state=NORMAL)
-		if(algor == 1 or algor == 2):
-			self.incre.config(state=NORMAL)
-			self.rad.delete(0,END)
-			self.rad.config(state=DISABLED)
-			self.itera.delete(0,END)
-			self.itera.config(state=DISABLED)
-			if(algor == 1):
-				self.labalgtyp.config(text=self.txtlab18a)
-			if(algor == 2):
-				self.labalgtyp.config(text=self.txtlab18b)		
-		if(algor == 3):	
-			self.itera.config(state=NORMAL)	
-			self.rad.delete(0,END)
-			self.rad.config(state=DISABLED)	
-			self.incre.delete(0,END)
-			self.incre.config(state=DISABLED)
-			self.labalgtyp.config(text=self.txtlab18c)
-		if(algor == 4):	
-			self.rad.config(state=NORMAL)
-			self.incre.delete(0,END)
-			self.incre.config(state=DISABLED)
-			self.itera.delete(0,END)
-			self.itera.config(state=DISABLED)
-			self.labalgtyp.config(text=self.txtlab18d)
+			self.hemisval.config(state="readonly")
+			
+			typhem = int(self.hemis.get())                                                  #<-------------
+			if(typhem == 0):                                                                #<-------------
+				self.labhemis.config(bg="yellow", foreground="blue", text=self.txtlab19a)	#<-------------
+			if(typhem == 1):                                                                #<-------------
+				self.labhemis.config(bg="yellow", foreground="blue",text=self.txtlab19b)    #<-------------
+			#self.hemis.config(state=NORMAL)                                                #<-------------
+			
+			if(algor == 1 or algor == 2):
+				self.incre.config(state=NORMAL)
+				self.forceval.config(state="readonly")            #<-------------
+				self.rad.delete(0,END)
+				self.rad.config(state=DISABLED)
+				self.itera.delete(0,END)
+				self.itera.config(state=DISABLED)
+				if(algor == 1):
+					self.labalgtyp.config(text=self.txtlab18a)
+				if(algor == 2):
+					self.labalgtyp.config(text=self.txtlab18b)		
+			if(algor == 3):	
+				self.incre.config(state=NORMAL)
+				self.forceval.config(state="readonly")            #<-------------
+				self.itera.config(state=NORMAL)	
+				self.rad.delete(0,END)
+				self.rad.config(state=DISABLED)	
+				self.labalgtyp.config(text=self.txtlab18c)
+			if(algor == 4):	
+				self.rad.config(state=NORMAL)
+				self.incre.delete(0,END)
+				self.incre.config(state=DISABLED)
+				self.force.set("0")                            #<-------------
+				self.forceval.config(state=DISABLED)              #<-------------
+				self.itera.delete(0,END)
+				self.itera.config(state=DISABLED)
+				self.labalgtyp.config(text=self.txtlab18d)
 		
 	#CHECK INTEGRITY----------------------------------------------------
 	def checkseq(self):
@@ -289,7 +310,6 @@ class Example(Frame):
 				self.demButton.configure(bg="red")
 				fallos +=1
 			if(resul == 1): #si existe
-				print self.num
 				if self.num < 2000:
 					self.ntipe = self.is_binary() #es binario
 					self.valnum = self.demtipe.get()
@@ -338,7 +358,6 @@ class Example(Frame):
 		#new xyz----------------------------------------------------
 		fallos = 0
 		if(self.newz.get() == 1):
-			print self.nwz.get()
 			val = self.nfase.get()
 			if val == 0:
 				textmsg = "Atencion, no se ha elegido la fase"
@@ -418,25 +437,24 @@ class Example(Frame):
 		self.labdmin.configure(bg="#d9d9d9")
 		self.labdnull.configure(bg="#d9d9d9")
 		#Valores DTM----------------------------------------------------
-		#***********************************Maxval
-		fallos = 0	
+		fallos = 0
+		#***********************************Maxval	
+		totresp = 0
 		self.valtx  = self.maxval.get()
-		self.texlab = "Maximo"
+		self.texlab = "Maxval"
 		if len(self.maxval.get()) == 0:
 			self.labdmax.configure(bg="red")
 			self.is_filled()
 			fallos +=1
 		if len(self.maxval.get()) > 0:
 			resp1 = self.is_punto()
-			resp2 = self.is_entero()
-			if(resp1 == 1 or resp2 == 1):
+			resp2 = self.is_decimal()
+			totresp = resp1 + resp2
+			if(totresp > 0):
 				self.labdmax.configure(bg="red")
-				if(resp1 == 1):
-					fallos += 1
-				if(resp2 == 1):
-					fallos += 1	
-		#***********************************Minval
-		fallos = 0	
+				fallos += totresp		
+		#***********************************Minval	
+		totresp = 0
 		self.valtx  = self.minval.get()
 		self.texlab = "Minimo"
 		if len(self.minval.get()) == 0:
@@ -445,17 +463,14 @@ class Example(Frame):
 			fallos +=1
 		if len(self.minval.get()) > 0:
 			resp1 = self.is_punto()
-			resp2 = self.is_entero()
-			if(resp1 == 1 or resp2 == 1):
+			resp2 = self.is_decimal()
+			totresp = resp1 + resp2
+			if(totresp > 0):
 				self.labdmin.configure(bg="red")
-				if(resp1 == 1):
-					fallos += 1
-				if(resp2 == 1):
-					fallos += 1			
+				fallos += totresp			
 		#***********************************Nullval
-		fallos = 0	
-		resp3  = 0
-		self.valtx  = self.minval.get()
+		totresp = 0
+		self.valtx  = self.nullval.get()
 		self.texlab = "Nullval"
 		if len(self.nullval.get()) == 0:
 			self.labdnull.configure(bg="red")
@@ -472,10 +487,6 @@ class Example(Frame):
 					fallos += 1	
 			if(resp1 == 0 and resp2 == 0):
 				self.valnum = int(self.nullval.get())
-				resp3       = self.is_negativo()		
-				if(resp3 == 1):
-					self.labdnull.configure(bg="red")
-					fallos += 1	
 		#****************
 		if fallos > 0:
 			msg2 = ("MDT con %i fallos\n" % fallos)
@@ -500,6 +511,7 @@ class Example(Frame):
 		fallos = 0	
 		if(self.recor.get() == 1):
 			#************************************Xmin
+			totresp = 0
 			self.valtx  = self.xmin.get()
 			self.texlab = "Xmin"
 			if len(self.xmin.get()) == 0:
@@ -518,6 +530,7 @@ class Example(Frame):
 					self.labdxmin.configure(bg="red")
 					fallos += totresp	
 			#************************************Xmax
+			totresp = 0
 			self.valtx  = self.xmax.get()
 			self.texlab = "Xmax"
 			if len(self.xmax.get()) == 0:
@@ -536,6 +549,7 @@ class Example(Frame):
 					self.labdxmax.configure(bg="red")
 					fallos += totresp			
 			#************************************Ymin
+			totresp = 0
 			self.valtx  = self.ymin.get()
 			self.texlab = "Ymin"
 			if len(self.ymin.get()) == 0:
@@ -554,6 +568,7 @@ class Example(Frame):
 					self.labdymin.configure(bg="red")
 					fallos += totresp		
 			#*************************************Ymax
+			totresp = 0
 			self.valtx  = self.ymax.get()
 			self.texlab = "Ymax"
 			if len(self.ymax.get()) == 0:
@@ -572,6 +587,7 @@ class Example(Frame):
 					self.labdymax.configure(bg="red")
 					fallos += totresp	
 			#***************************************resx
+			totresp = 0
 			self.valtx  = self.resx.get()
 			self.texlab = "Resx"
 			if len(self.resx.get()) == 0:
@@ -590,6 +606,7 @@ class Example(Frame):
 					self.labdrex.configure(bg="red")
 					fallos += totresp		
 			#****************************************resy
+			totresp = 0
 			self.valtx  = self.resy.get()
 			self.texlab = "Resy"
 			if len(self.resy.get()) == 0:
@@ -694,12 +711,13 @@ class Example(Frame):
 				return 1		
 			
 	def checktrayectorias(self):
-		"""check integrity in the GUI"""
+		"""check integrity in the GUI"""		
 		wkdir = os.getcwd()
 		self.labdminlabdmax.configure(bg="#d9d9d9")
 		self.labdminlabalt.configure(bg="#d9d9d9")
 		self.labdminlabrad.configure(bg="#d9d9d9")
 		self.labdminlabinc.configure(bg="#d9d9d9")
+		self.labdminlabfor.configure(bg="#d9d9d9")       #<-------------
 		self.labdminlabnpt.configure(bg="#d9d9d9")
 		self.labdminlabite.configure(bg="#d9d9d9")
 		self.T.configure(bg="white")
@@ -777,7 +795,32 @@ class Example(Frame):
 					msg2 = "Error en trayectorias, faltan puntos con coordenadas\n"
 					self.txtout.insert("0.0", msg2)
 					print msg2
-					fallos += 1
+					fallos += 1		
+			#***********************************MODE
+			self.valtx  = self.mod.get()
+			self.texlab = "Mode"
+			if len(self.mod.get()) == 0:
+				self.labdminlabmod.configure(bg="red")
+				self.is_filled()
+				fallos +=1
+			if len(self.mod.get()) > 0:
+				resp1 = self.is_punto()
+				resp2 = self.is_entero()
+				if(resp1 == 1 or resp2 == 1):
+					self.labdminlabmod.configure(bg="red")
+					if(resp1 == 1):
+						fallos += 1
+					if(resp2 == 1):
+						fallos += 1
+				var = int(self.mod.get())
+				if var < 0 or var > 1:
+					textmsg = "Atencion, MODE debe estar entre 0 y 1\n"
+					self.labdminlabmod.configure(bg="red")
+					msg = showerror(title = "Error", message = textmsg)
+					msg2 = "Error en mode\n"
+					self.txtout.insert("0.0", msg2)
+					print msg2
+					fallos += 1		
 			#***********************************HUSO
 			self.valtx  = self.huso.get()
 			self.texlab = "Huso"
@@ -795,7 +838,6 @@ class Example(Frame):
 					if(resp2 == 1):
 						fallos += 1
 				var = int(self.huso.get())
-				print var
 				if var < 0 or var > 60:
 					textmsg = "Atencion, el uso debe estar entre 0 y 60\n"
 					self.labhuso.configure(bg="red")
@@ -847,7 +889,7 @@ class Example(Frame):
 					if(resp2 == 1):
 						fallos += 1	
 		#************************************IncAlt
-		if(algor == 1 or algor == 2):
+		if(algor == 1 or algor == 2 or algor == 3):
 			self.valtx  = self.incre.get()
 			self.texlab = "IncAlt"
 			if len(self.incre.get()) == 0:
@@ -865,6 +907,34 @@ class Example(Frame):
 				if(totresp > 0):
 					self.labdminlabinc.configure(bg="red")
 					fallos += totresp
+					
+		#***********************************FORCE
+		if(algor == 1 or algor == 2 or algor == 3):
+			self.valtx  = self.force.get()
+			self.texlab = "Force"
+			if len(self.force.get()) == 0:
+				self.labdminlabfor.configure(bg="red")
+				self.is_filled()
+				fallos +=1
+			if len(self.force.get()) > 0:
+				resp1 = self.is_punto()
+				resp2 = self.is_entero()
+				if(resp1 == 1 or resp2 == 1):
+					self.labdminlabfor.configure(bg="red")
+					if(resp1 == 1):
+						fallos += 1
+					if(resp2 == 1):
+						fallos += 1
+				var = int(self.force.get())
+				print var
+				if var < 0 or var > 1:
+					textmsg = "Atencion, FORCE debe estar entre 0 y 1\n"
+					self.labdminlabfor.configure(bg="red")
+					msg = showerror(title = "Error", message = textmsg)
+					msg2 = "Error en mode\n"
+					self.txtout.insert("0.0", msg2)
+					print msg2
+					fallos += 1					
 		#************************************Itera
 		if(algor == 3):	
 			self.valtx  = self.itera.get()
@@ -903,7 +973,6 @@ class Example(Frame):
 	
 	#CHECK BINARY - TYPE NUMBER-----------------------------------------
 	def is_binary(self):
-		print self.ntipe
 		filename = self.valtx
 		fin = open(filename, 'rb')
 		try:
@@ -992,14 +1061,14 @@ class Example(Frame):
 			return 0		
 			
 	def is_positivo(self):	
-		if(self.valnum <= 0):
+		if(self.valnum < 0):
 			textmsg = ("Atencion, %s debe ser positivo" % self.texlab)
 			msg = showerror(title = "Error", message = textmsg)
 			msg2 = "Error en valor, debe ser postivio\n"
 			self.txtout.insert("0.0", msg2)
 			print msg2
 			return 1
-		if(self.valnum > 0):
+		if(self.valnum >= 0):
 			return 0
 	
 	def is_negativo(self):	
@@ -1089,6 +1158,7 @@ class Example(Frame):
 		self.labdminlabalt.configure(bg="#d9d9d9")
 		self.labdminlabrad.configure(bg="#d9d9d9")
 		self.labdminlabinc.configure(bg="#d9d9d9")
+		self.labdminlabmod.configure(bg="#d9d9d9")
 		self.labdminlabnpt.configure(bg="#d9d9d9")
 		self.T.configure(bg="white")
 		self.labhuso.configure(bg="#d9d9d9")
@@ -1135,14 +1205,16 @@ class Example(Frame):
 		self.dismax.delete(0,END)
 		self.altmax.delete(0,END)
 		self.rad.delete(0,END)
+		self.force.set("0") 
 		self.incre.delete(0,END)
+		self.mod.set('0')
 		self.npt.delete(0,END)
 		self.npt.insert( INSERT, "0" )
 		self.T.delete("0.0",'end')
 		self.huso.delete(0,END)
 		self.huso.config(state=DISABLED)
-		self.hemis.delete(0,END)
-		self.hemis.config(state=DISABLED)
+		self.hemisval.delete(0,END)
+		self.hemisval.config(state=DISABLED)
 		
 	
 	#OPEN FILE----------------------------------------------------------
@@ -1236,6 +1308,7 @@ class Example(Frame):
 		"""Save file, create a new file."""
 		#check integrity--------------------------------------------
 		valchk = self.checkseq()
+		print(valchk)
 		if valchk == 1:
 			#escribe un fichero de salida
 			self.cfgfile = tkFileDialog.asksaveasfilename(parent=self,filetypes=[('Config file','*.cfg')] ,title="Save configfile as...")		
@@ -1309,13 +1382,12 @@ class Example(Frame):
 				self.txtfile.writelines("%s /masknamefile.grd\n" % self.txtout5)
 				self.txtfile.writelines("%s %s\n" % (self.txtout6, finalxyz))
 				
-
 		#---------------------------------------------------------------		
 		self.txtfile.writelines("[%s]\n" % self.txtout7)
 		#self.txtfile.writelines("DEM_NAME %s\n" % self.demname.get())
 		self.txtfile.writelines("%s %i\n" % (self.txtout8, self.demtipe.get()))
-		self.txtfile.writelines("MAX_ZVAL %i\n" % int(self.maxval.get()))
-		self.txtfile.writelines("MIN_ZVAL %i\n" % int(self.minval.get()))
+		self.txtfile.writelines("MAX_ZVAL %s\n" % self.maxval.get())
+		self.txtfile.writelines("MIN_ZVAL %s\n" % self.minval.get())
 		self.txtfile.writelines("NULL_VAL %i\n" % int(self.nullval.get()))
 		if(self.recor.get() == 0):
 			self.txtfile.writelines("%s 0\n" % self.txtout9)
@@ -1353,6 +1425,7 @@ class Example(Frame):
 			self.txtfile.writelines("%s 0\n" % self.txtout17)
 			self.txtfile.writelines("%s 0.0\n" % self.txtout18)
 			self.txtfile.writelines("%s 0\n" % self.txtout19)
+			self.txtfile.writelines("%s 0\n" % self.txtout22)       #<--------------
 			self.txtfile.writelines("UTMZONE 0\n")
 			self.txtfile.writelines("HEMIS 0\n")
 			self.txtfile.writelines("[SEC_POINTS]\n")
@@ -1365,15 +1438,19 @@ class Example(Frame):
 			if ( algo == 1 or algo == 2):
 				self.txtfile.writelines("%s 0\n" % self.txtout17)
 				self.txtfile.writelines("%s %s\n" % (self.txtout18, self.incre.get()))
+				self.txtfile.writelines("%s %s\n" % (self.txtout23, self.force.get()))
 				self.txtfile.writelines("%s 0\n" % self.txtout19)
 			if ( algo == 3):		
 				self.txtfile.writelines("%s 0\n" % self.txtout17)
-				self.txtfile.writelines("%s 0.0\n" % self.txtout18)
+				self.txtfile.writelines("%s %s\n" % (self.txtout18, self.incre.get()))
+				self.txtfile.writelines("%s %s\n" % (self.txtout23, self.force.get()))
 				self.txtfile.writelines("%s %s\n" % (self.txtout19, self.itera.get()))
 			if ( algo == 4):
 				self.txtfile.writelines("%s %s\n" % (self.txtout17, self.rad.get()))
 				self.txtfile.writelines("%s 0.0\n" % self.txtout18)
-				self.txtfile.writelines("%s 0\n" % self.txtout19)	
+				self.txtfile.writelines("%s 0\n" % self.txtout23)
+				self.txtfile.writelines("%s 0\n" % self.txtout19)
+			self.txtfile.writelines("WRITE_MOD %s\n" % self.mod.get())		
 			self.txtfile.writelines("UTMZONE %s\n" % self.huso.get())
 			self.txtfile.writelines("HEMIS %s\n" % self.hemis.get())
 			self.txtfile.writelines("[SEC_POINTS]\n")
@@ -1399,10 +1476,8 @@ class Example(Frame):
 			self.txtout.delete("0.0",END)
 			name = archivo.name
 			cfgname = os.path.basename(name)
-			#print cfgname
 			textmsg = ("Leyendo archivo %s\n" % cfgname)
 			self.txtout.insert("0.0", textmsg)
-			#print textmsg
 			self.cleangui()
 			lines = archivo.readlines()
 			lines = [line.rstrip('\n') for line in lines]
@@ -1525,9 +1600,8 @@ class Example(Frame):
 				val = lines[26].split(" ")  #algoritmos
 				self.tratip.set(val[1]) 
 				alg = int(val[1])
-				#print str(alg) + "algo"
-				self.update_chk()#----------CHECK
 				if(alg > 0):
+					self.update_chk()#----------CHECK
 					val = lines[27].split(" ")  #distmax
 					self.dismax.delete(0,END)
 					self.dismax.insert(INSERT, val[1])
@@ -1535,57 +1609,75 @@ class Example(Frame):
 					self.altmax.delete(0,END)
 					self.altmax.insert(INSERT, val[1])
 					
-					val = lines[32].split(" ")  #huso
+					val = lines[33].split(" ")  #mod
+					self.modval.delete(0,END)
+					self.mod.set(val[1])
+					
+					val = lines[34].split(" ")  #huso
 					self.huso.delete(0,END)
 					self.huso.insert(INSERT, val[1])
 					
-					val = lines[33].split(" ")  #hemis
-					self.hemis.delete(0,END)
-					self.hemis.insert(INSERT, val[1])
+					val = lines[35].split(" ")  #hemis
+					self.hemisval.delete(0,END)
+					self.hemis.set(val[1])                              #<--------------
+					#self.hemisval.insert(INSERT, val[1])
 					
-					val = lines[35].split(" ")  #npt
+					val = lines[37].split(" ")  #npt
 					self.npt.delete(0,END)
 					self.npt.insert(INSERT, val[1])
 					npt = int(val[1])
 					if(npt > 0):
 						j=1;	
-						for i in xrange(37, npt+37):  #puntos xy
-							if(i == 37):
+						for i in xrange(39, npt+39):  #puntos xy
+							if(i == 39):
 								self.T.delete("0.0",'end')
 								self.T.insert("0.0", lines[i] + '\n')
-							if(i > 37 and i < npt+37-1):	
+							if(i > 39 and i < npt+39-1):	
 								self.T.insert(str(j)+".0", lines[i] + '\n')
-							if(i == npt+37-1):
+							if(i == npt+39-1):
 								self.T.insert(str(j)+".0", lines[i])		
 							j +=1;
 					if(npt == 0):	
 						self.npt.delete(0,END)
 						self.npt.insert(INSERT, "0")		
 					self.update_chk()#----------CHECK
-				if(alg == 1 or alg == 2):	
-					val = lines[30].split(" ")  #incremento
-					self.incre.delete(0,END)
-					self.incre.insert(INSERT, val[1])
-					self.rad.delete(0,END)
-					self.rad.insert(INSERT, "0.0")	
-					self.itera.delete(0,END)
-					self.itera.insert(INSERT, "0.0")	
-				if(alg == 3):			
-					val = lines[31].split(" ")  #itera
-					self.itera.delete(0,END)
-					self.itera.insert(INSERT, val[1])
-					self.rad.delete(0,END)
-					self.rad.insert(INSERT, "0.0")	
-					self.incre.delete(0,END)
-					self.incre.insert(INSERT, "0.0")
-				if(alg == 4):
-					val = lines[29].split(" ")  #radbus
-					self.rad.delete(0,END)
-					self.rad.insert(INSERT, val[1])	
-					self.incre.delete(0,END)
-					self.incre.insert(INSERT, "0.0")
-					self.itera.delete(0,END)
-					self.itera.insert(INSERT, "0.0")	
+					if(alg == 1 or alg == 2):	
+						val = lines[30].split(" ")  #incremento
+						self.incre.delete(0,END)
+						self.incre.insert(INSERT, val[1])
+						
+						val = lines[31].split(" ")  #force
+						self.forceval.delete(0,END)
+						self.force.set(val[1])
+						
+						self.rad.delete(0,END)
+						self.rad.insert(INSERT, "0.0")	
+						self.itera.delete(0,END)
+						self.itera.insert(INSERT, "0.0")	
+					if(alg == 3):
+						val = lines[30].split(" ")  #incremento
+						self.incre.delete(0,END)
+						self.incre.insert(INSERT, val[1])
+							
+						val = lines[31].split(" ")  #force
+						self.forceval.delete(0,END)
+						self.force.set(val[1])		
+						
+						val = lines[32].split(" ")  #itera
+						self.itera.delete(0,END)
+						self.itera.insert(INSERT, val[1])
+						self.rad.delete(0,END)
+						self.rad.insert(INSERT, "0.0")	
+						#self.incre.delete(0,END)
+						#self.incre.insert(INSERT, "0.0")
+					if(alg == 4):
+						val = lines[29].split(" ")  #radbus
+						self.rad.delete(0,END)
+						self.rad.insert(INSERT, val[1])	
+						self.incre.delete(0,END)
+						self.incre.insert(INSERT, "0.0")
+						self.itera.delete(0,END)
+						self.itera.insert(INSERT, "0.0")	
 				#----------------------	
 				archivo.close()	
 				msg2 = "End load file\n"		
@@ -1616,10 +1708,8 @@ class Example(Frame):
 			self.txtout.delete("0.0",END)
 			name = archivo.name
 			cfgname = os.path.basename(name)
-			#print cfgname
 			textmsg = ("Leyendo archivo %s\n" % cfgname)
 			self.txtout.insert("0.0", textmsg)
-			#print textmsg
 			#self.cleangui()
 			self.T.delete("0.0",'end')
 			lines = archivo.readlines()
@@ -1628,14 +1718,14 @@ class Example(Frame):
 			#---
 			val = lines[0].split()
 			nval = len(val)
-			if nval != 4:
-				textmsg = "Atencion, el archivo debe tener 4 columnas - X Y Integer Integer - separadas por espacios"
+			if nval != 2:
+				textmsg = "Atencion, el archivo debe tener 2 columnas - X Y - separadas por espacios"
 				msg = showerror(title = "Error", message = textmsg)
 				msg2 = "Error en estructura del archivo\n"
 				self.txtout.insert("0.0", msg2)
 				print msg2
 				return 1
-			if nval == 4:
+			if nval == 2:
 				#check si hay cabecera
 				self.valtx  = val[0]
 				self.ndectype = 1
@@ -1656,15 +1746,16 @@ class Example(Frame):
 				self.ndectype = 1
 				resp2 = self.is_decimal()
 				
-				self.valtx  = val[2]
-				self.ndectype = 1
-				resp3 = self.is_entero()
+				#self.valtx  = val[2]
+				#self.ndectype = 1
+				#resp3 = self.is_entero()
 				
-				self.valtx  = val[3]
-				self.ndectype = 1
-				resp4 = self.is_entero()
+				#self.valtx  = val[3]
+				#self.ndectype = 1
+				#resp4 = self.is_entero()
 					
-				if resp1 == 0 and resp2 == 0 and resp3 == 0 and resp4 == 0:
+				#if resp1 == 0 and resp2 == 0 and resp3 == 0 and resp4 == 0:
+				if resp1 == 0 and resp2 == 0:
 					msg2 = "Estructura correcta, leyendo archivo\n"
 					self.txtout.insert("0.0", msg2)
 					print msg2
@@ -1689,7 +1780,7 @@ class Example(Frame):
 					self.npt.insert( INSERT, str(nlin) )	
 					return 0
 				else:
-					textmsg = "Error en estructura, el archivo debe tener 4 columnas - X Y Integer Integer - separadas por espacios\n"
+					textmsg = "Error en estructura, el archivo debe tener 2 columnas - X Y - separadas por espacios\n"
 					msg = showerror(title = "Error", message = textmsg)
 					self.txtout.insert("0.0", textmsg)
 					print msg		
@@ -1759,6 +1850,10 @@ class Example(Frame):
 			self.txtlab18c = "Montecarlo Random"
 			self.txtlab18d = "Multidireccional Min.Top."
 			self.txtlab19  = "Hemisferio"
+			self.txtlab19a = "Hemisferio Norte"
+			self.txtlab19b = "Hemisferio Sur"
+			self.txtlab20  = "Modo Esc. Raster"
+			self.txtlab21  = "Forzar Interacc."
 			
 			self.txtchk1 = "MDT modifica"
 			self.txtchk2 = "Fase I"
@@ -1811,6 +1906,8 @@ class Example(Frame):
 			self.txtout19 = "INTERACIONES"
 			self.txtout20 = "PUNTOS_TOTALES"
 			self.txtout21 = "PUNTOS_DATOS"
+			self.txtout22 = "ESCRIB_MODO"
+			self.txtout23 = "FORZAR_INTER"
 			
 			
 		if (self.LAN == 2):
@@ -1852,6 +1949,10 @@ class Example(Frame):
 			self.txtlab18c = "Montecarlo Random"
 			self.txtlab18d = "Multiple Path. LHM"
 			self.txtlab19  = "Hemisphere"
+			self.txtlab19a = "Northern Hemisphere"
+			self.txtlab19b = "Southern Hemisphere"
+			self.txtlab20  = "W. Raster Mode"
+			self.txtlab21  = "Force Interacc."
 			
 			self.txtchk1 = "Modified DEM"
 			self.txtchk2 = "Step I"
@@ -1903,16 +2004,18 @@ class Example(Frame):
 			self.txtout16 = "CRIT_HEIGHT"
 			self.txtout17 = "REST_MULTIFLOW"
 			self.txtout18 = "FILL_INCRE"
-			self.txtout19 = "INTERATIONS"
+			self.txtout19 = "ITERATIONS"
 			self.txtout20 = "TOTAL_POINTS"
 			self.txtout21 = "POINT_DATA"
+			self.txtout22 = "WRITE_MOD"
+			self.txtout23 = "FORCE_INTER"
 	
 	#GRAFIC GUI---------------------------------------------------------
 	def initUI(self):
 		self.ndectype = 0
 		self.ntipe = 0
-		self.parent.title("MDTanaliza v. 2.1-2017-07-10")
-		self.currentv = '1.1'
+		self.parent.title("MDTanaliza v. 2.1-2018-04-06")
+		self.currentv = '1.2'
 		self.pack(fill=BOTH, expand=1)
 		self.lanGUI()
 		
@@ -2092,18 +2195,33 @@ class Example(Frame):
 		self.labdminlabrad.grid(row=10,column=2)
 		self.labdminlabinc = Label(self, justify=LEFT, text=self.txtlab15, relief=RIDGE, width=25)
 		self.labdminlabinc.grid(row=11,column=2)
+		self.labdminlabfor = Label(self, justify=LEFT, text=self.txtlab21, relief=RIDGE, width=25) #<---------------
+		self.labdminlabfor.grid(row=12,column=2)
 		self.labdminlabite = Label(self, justify=LEFT, text=self.txtlab16, relief=RIDGE, width=25)
-		self.labdminlabite.grid(row=12,column=2)
+		self.labdminlabite.grid(row=13,column=2)
+		self.labdminlabmod = Label(self, justify=LEFT, text=self.txtlab20, relief=RIDGE, width=25)   #<---------------
+		self.labdminlabmod.grid(row=14,column=2)
+		
 		self.labdminlabnpt = Label(self, justify=LEFT, text=self.txtlab17, relief=RIDGE, width=25)
-		self.labdminlabnpt.grid(row=13,column=2)
+		self.labdminlabnpt.grid(row=15,column=2)
 		#campos	
-		self.tratip = StringVar()
+		self.tratip  = StringVar()
 		self.trayval = Spinbox(self, from_=0, to=4, textvariable=self.tratip, width=20, command = self.update_chk, state="readonly")
-		self.dismax = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.altmax = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.rad = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.incre = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.itera = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		self.dismax  = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		self.altmax  = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		self.rad     = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		self.incre   = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		
+		#self.force   = Entry(self, justify=RIGHT, width=20, state=DISABLED)           #<---------------
+		self.force  = StringVar()
+		self.forceval = Spinbox(self, from_=0, to=1, textvariable=self.force, width=20, command = self.update_chk, state=DISABLED)
+		
+		self.itera   = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		
+		#self.mod     = Entry(self, justify=RIGHT, width=20, state=DISABLED)            #<---------------
+		self.mod  = StringVar()
+		self.modval = Spinbox(self, from_=0, to=1, textvariable=self.mod, width=20, command = self.update_chk, state=DISABLED)
+		
 		self.npt = Entry(self, justify=RIGHT, width=20)
 		self.npt.delete(0,END)
 		self.npt.insert( INSERT, "0" )
@@ -2112,27 +2230,35 @@ class Example(Frame):
 		self.altmax.grid(row=9, column=3)
 		self.rad.grid(row=10, column=3)
 		self.incre.grid(row=11, column=3)
-		self.itera.grid(row=12, column=3)
-		self.npt.grid(row=13, column=3)
+		self.forceval.grid(row=12, column=3)                                            #<---------------
+		self.itera.grid(row=13, column=3)
+		self.modval.grid(row=14, column=3)                                                #<---------------
+		self.npt.grid(row=15, column=3)  #de 13 a 14
+		
+		
 		#LOAD XY VENTS
 		self.S = Scrollbar(self)
-		self.T = Text(self, height=5, width=27, state=DISABLED)
-		self.S.grid(row=14, column=3, rowspan=5, sticky=N+S+E)
+		self.T = Text(self, height=4, width=27, state=DISABLED)
+		self.S.grid(row=15, column=3, rowspan=5, sticky=N+S+E)
 		#self.T.grid(row=14, column=3, rowspan=5, columnspan=1, pady=3, sticky=W)
-		self.T.grid(row=14, column=3, rowspan=5)
+		self.T.grid(row=15, column=3, rowspan=5)
 		self.S.config(command=self.T.yview)
 		self.T.config(yscrollcommand=self.S.set)
 		self.loadnpt = Button(self, text="Load xy file", width=20, comman=self.loadnpt, state=DISABLED)
-		self.loadnpt.grid(row=15, column=2,)
+		self.loadnpt.grid(row=16, column=2,)
 		#--
 		self.labhuso = Label(self, justify=LEFT, text="UTM ZONE", relief=RIDGE, width=20)
-		self.labhuso.grid(row=19,column=3)
+		self.labhuso.grid(row=20,column=3)
 		self.huso = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.huso.grid(row=20, column=3,)
+		self.huso.grid(row=21, column=3,)
 		self.labhemis = Label(self, justify=LEFT, text=self.txtlab19, relief=RIDGE, width=20)
-		self.labhemis.grid(row=21,column=3)
-		self.hemis = Entry(self, justify=RIGHT, width=20, state=DISABLED)
-		self.hemis.grid(row=22, column=3,)
+		self.labhemis.grid(row=22,column=3)
+		#self.hemis = Entry(self, justify=RIGHT, width=20, state=DISABLED)
+		#self.hemis.grid(row=23, column=3,)
+		
+		self.hemis  = StringVar()
+		self.hemisval = Spinbox(self, from_=0, to=1, textvariable=self.hemis, width=20, command = self.update_chk, state=DISABLED)
+		self.hemisval.grid(row=23, column=3,)
 		
 		#Salida de mensajes---------------------------------------------
 		self.labpanel = Label(self, text=self.txtgen6, fg = "red", width=25)

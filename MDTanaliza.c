@@ -11,20 +11,21 @@
 #define TRUE  1
 #define FALSE 0
 #define PI 3.14159265
-#define CURRENV "1.1"                                                   /*!< version to check config files */
+#define CURRENV "1.2"                                                   /*!< version to check config files */
 #define OUTPUTPATH 500                                                  /*!< limit to write txt or kml files in flow models 1 and 2  */
 #define ZPOINTS 10000                                                   /*!< total init z point allowed */
-#define BEDRIVER 300000                                                 /*!< total bed river point allowed in each flow path */
+#define BEDRIVER 500000                                                 /*!< total bed river point allowed in each flow path */
 #define LAN 1                                                           /*!< Language 1 Spanish 2 English */
+#define SIZE 100000                                                     /*!< FIFO size in multiflow model */
 
 /**
-* Copyright (C) 2001-2017  Jose M. Marrero <josemarllin@gmail.com> and Ramon Ortiz <ramonortizramis@gmail.com>
+* Copyright (C) 2009-2017  Jose M. Marrero <josemarllin@gmail.com> and Ramon Ortiz <ramonortizramis@gmail.com>
 * You may use, distribute and modify this code under the terms of the MIT License.
 * The authors will not be held responsible for any damage or losses or for any implications 
 * whatsoever resulting from downloading, copying, compiling, using or otherwise handling this 
 * source code or the program compiled.
 * Code name: MDTanaliza
-* Version: 2.1-2017-07-10
+* Version: 2.1-2018-04-06 
 * Compiled command line: gcc MDTanaliza.c -o MDTanaliza -lm
 * Execute command line:  ./MDTanaliza configfilename.cfg
 */ 
@@ -41,25 +42,28 @@ char nom_outviakl[256], nom_mask[256], nom_resum[256];
 * GLOBAL VARIABLES - CONFIG VAR
 */
 char name_invents[256], version[80];
+int mod;
 double nullval;
 /**
 * GLOBAL VARIABLES - AUX FUNCTIONS
 */
 int vcol, vrow;
 int chksum;
-int FIFO[10000][2];
+int FIFO[SIZE][2];
 int gauss[1000], gaussb[1000];
 double c1, c2, c3, c4, c5, c6, c7, c8, c9;
 double top[8], h[8];
 double sum1, sum2, sum3, dlbox;
 double longitud, latitud;
+double globx, globy;
 /**
 * GLOBAL VARIABLES - DEM VAR
 */
 char header[8];
-int opendem, dem_type, demmax, demmin, recort;
+int opendem, dem_type, recort, totdemcel;
 int col1, row1, col2, row2, col3, row3, col4, row4, colx, rowy;
 int nx, ny, nxc, nyc, ok;
+double demmax, demmin;
 double xlo, xhi, ylo, yhi, zlo, zhi, resx, resy, invresx, invresy, resxx, resyy;
 double xlonew, xhinew, ylonew, yhinew;
 double xmin, xmax, ymin, ymax;
@@ -70,10 +74,10 @@ double **rast1;
 double **rast2;
 double **rast3;
 /**
-* GLOBAL VARIABLES - MODIFY DEM VAR
+* GLOBAL VARIABLES - MODIFY MASK VAR
 */
 char header2[8];
-int modidem, demmask;
+int modidem;
 int totalnwz;
 int mask_type, fase, openmask, chkmod1, chkmod2, chkmod3;
 int totmask, totmodmask;
@@ -93,15 +97,21 @@ int totalsink;
 /**
 * GLOBAL VARIABLES - FLOW PATH
 */
-int ncentros, flowtyp, huso, hemis;
+int ncentros, flowtyp, huso, hemis, forcevar;
 int maxval, chksing1, chksing2, chksing3, chksing4;
 int errcsv[ZPOINTS], errkml[ZPOINTS];
 int nfile, totalpt, totalfix;
 int nitera, iterafin;
 int fcolm, frowm;
-int size,puntero,test;
+int puntero, test, sizearray;
+int resflow, tocelflw, totskflw;
+int glpasreach, gllimext, glmxdisreach, glbadcell, glnowayout;
 float lmax, hl, hl2, incre, distpt, distran;
 double centros[5000][2], maximun;
+double mxdisflw, areaflow, acumldis, acumarea;
+double *inxdir, *inydir;
+long firsepoch, iniepoch, endepoch, difepoch;
+
 /**
 * LANGUAGE MENSSAGES
 */
@@ -111,7 +121,7 @@ char const * const EStrings[] =
     "Imposible almacenar los puntos de inicio, reduzca el numero o amplie la capacidad de memoria\n",
     "Modifique la variable ZPOINTS\n",
     "Antencion, no hay puntos de inicio para el calculo de trayectorias\n",
-	"Antencion, existe directorio de salida, borramos archivos txt y kml",
+	"Antencion, existe directorio de salida, borramos archivos csv y kml",
 	"Inicio de lectura del archivo de configuracion\n",
 	"Inicio de lectura del MDT\n", //6
 	"Modificacion MDT activada\n",
@@ -138,7 +148,7 @@ char const * const EStrings[] =
 	"Error, dimensiones del MDT y mascara son distintas\n",
 	"ATENCION, ocurrió un error al generar el archivo xyz de salida\n",
 	"ATENCION, ocurrió un error al leer el archivo xyzz\n", 
-	"Simulacion correcta, no se detectaron alertas"
+	"Simulación correcta, no se detectaron alertas"
     
 };
 char const * const ENtrings[] = 
@@ -147,15 +157,15 @@ char const * const ENtrings[] =
     "The init z points can not stored, decrease the number or increase the memory capacity\n",
     "Change the variable ZPOINTS\n",
     "Warning, There are not available init z points to flow path calculation\n",
-	"Warning, The output directory exists, the txt and kml files will be deleted",
+	"Warning, The output directory exists, the csv and kml files will be deleted",
 	"Reading config file\n",
 	"Reading DEM input file\n", //6
-	"Iniciating DEM modification\n",
+	"Initiating DEM modification\n",
 	"Step 1\n",
 	"Step 2\n",
 	"Warning, DEM and Mask are not equal\n",
 	"Please, check mask and try again\n",
-	"Cheking surface depression in DEM\n", //12
+	"Checking surface depression in DEM\n", //12
 	"Calculating slope-aspect\n",
 	"Calculating slope-gradient\n",
 	"Calculating flow paths\n",
@@ -169,11 +179,11 @@ char const * const ENtrings[] =
 	"Alg: Surface depression detection and modification in DEM\n",
 	"Warning, there were some problems, check resume file\n", //24
 	"WARNING: THE PROGRAM HAS BEEN STOPPED",
-	"Error oppening the DEM file, check format and type file\n",
-	"Error oppening the MASK file, check format and type file\n",
+	"Error opening the DEM file, check format and type file\n",
+	"Error opening the MASK file, check format and type file\n",
 	"Error, DEM and MASK size is different\n",
-	"WARNING, an error ocurred while creating xyz output file\n",
-	"WARNING, an error ocurred while reading xyzz input file\n",
+	"WARNING, an error occurred while creating xyz output file\n",
+	"WARNING, an error occurred while reading xyz input file\n",
 	"Correct simulation, warning not detected"
     
 };
@@ -181,6 +191,8 @@ char const * const ENtrings[] =
 /**
 * STRUCT DEFINITION
 */
+struct tm;
+
 typedef struct  
 {  
 	int    cjerar;
@@ -197,7 +209,7 @@ typedef struct
 	float  cdt;
 	int    quality;
 }CAUCE;
-CAUCE caucerio[BEDRIVER];                                               /*!< Store cell attributes from each flow paht */
+CAUCE caucerio[BEDRIVER];                                               /*!< Store cell attributes from each flow path */
 
 typedef struct  
 {  
@@ -221,6 +233,7 @@ void campana(void);
 int  convert_coor(double coorx, double coory);
 int  getmovingcell(int ix, int jy, int withdif);
 void calc_index(double vx, double vy);
+void get_coor(int col, int row);
 void calc_levelfill(int col, int row);
 int  calc_isosink(int coli, int rowj);
 //---
@@ -232,23 +245,32 @@ int getnpt(void);
 int readchangenewz(void);
 //--
 int  fix_sinks(void);
-void calc_saspect(void);
-void calc_sgrad(void);
+int calc_saspect(void);
+int calc_sgrad(void);
 //---
 void calc_singflow(void);
 void calc_montflow(void);
 void calc_mulflow(void);
 //--
 int write_newdem(int typ);
-int write_rast1(int typ);
-int write_rast3(int typ);
-int write_rast2(int typ);
+int write_rast1(int typ, int mod);
+int write_rast2(int typ, int mod);
+int write_rast3(int typ, int mod);
 //---
 int write_pathcsv(void);
 int write_outkmll(void);
 //---
+int write_flowres(void);
 int write_resum(void);
-//**********************************************************************
+
+
+//---------------------------------------------------------------------------------------
+//***************************************************************************************
+//*********************************END HEAD FILE*****************************************
+//***************************************************************************************
+//********************************READING FUNCTIONS**************************************
+//***************************************************************************************
+//---------------------------------------------------------------------------------------
 
 /*! READING CONFIGURATION FILE */
 int read_cfg(void)
@@ -310,10 +332,10 @@ double txcoor, tycoor;
 			*/
 			fscanf(file,"%s", texto);  
 			fscanf(file,"%s %i",  texto, &dem_type);                    /*!< 1 Binary / 2 ASCII */
-			fscanf(file,"%s %i",  texto, &demmax);                      /*!< Max. Z value in DEM or interest area */
-			fscanf(file,"%s %i",  texto, &demmin);                      /*!< Min. Z value in DEM or interest area */
+			fscanf(file,"%s %lf",  texto, &demmax);                      /*!< Max. Z value in DEM or interest area */
+			fscanf(file,"%s %lf",  texto, &demmin);                      /*!< Min. Z value in DEM or interest area */
 			fscanf(file,"%s %lf", texto, &nullval);                     /*!< Null value to be used at internal level and in output raster */
-			fscanf(file,"%s %i",  texto, &recort);                      /*!< If DEM will be cliped value 1-0 */
+			fscanf(file,"%s %i",  texto, &recort);                      /*!< If DEM will be clipped value 1-0 */
 			fscanf(file,"%s %lf", texto, &xlonew);                      /*!< X min. coord. bottom-left corner */
 			fscanf(file,"%s %lf", texto, &xhinew);                      /*!< X max. coord. bottom-right corner */
 			fscanf(file,"%s %lf", texto, &ylonew);                      /*!< Y min. coord. bottom-left corner */
@@ -334,9 +356,11 @@ double txcoor, tycoor;
 			fscanf(file,"%s %i", texto, &flowtyp);                      /*!< If higher than 0, flow path will be activated - algorithms 1-4 */
 			fscanf(file,"%s %f", texto, &lmax);                         /*!< Max. distance in meters (1-4) */
 			fscanf(file,"%s %f", texto, &hl);                           /*!< Critical height in meters (1-4) */
-			fscanf(file,"%s %f", texto, &distran);                      /*!< Restric multiplow in % (4)*/
-			fscanf(file,"%s %f", texto, &incre);                        /*!< Fill increase in meters (1,2)*/
+			fscanf(file,"%s %f", texto, &distran);                      /*!< Restrict multiplow in % (4)*/
+			fscanf(file,"%s %f", texto, &incre);                        /*!< Fill increase in meters (1-3)*/
+			fscanf(file,"%s %i", texto, &forcevar);						/*!< Force interaction between different paths (1 yes - 0 No)*/
 			fscanf(file,"%s %i", texto, &nitera);                       /*!< Total number of Interations (3) */
+			fscanf(file,"%s %i", texto, &mod); 							/*!< Writing raster mode, 0 unified raster, 1 raster per point */
 			fscanf(file,"%s %i", texto, &huso);                         /*!< Huso/UTM grid zones */
 			fscanf(file,"%s %i", texto, &hemis);                        /*!< Hemisphere North 0 South 1 */
 			fscanf(file,"%s", texto);
@@ -398,8 +422,8 @@ double txcoor, tycoor;
     //-----------
     printf("[SEC_DEM]\n");    
     printf("DEM TYPE = %i\n",dem_type);
-    printf("DEM MAX VALUE = %i\n",demmax);
-	printf("DEM MIN VALUE = %i\n",demmin);
+    printf("DEM MAX VALUE = %lf\n",demmax);
+	printf("DEM MIN VALUE = %lf\n",demmin);
     printf("DEM NULL DATA = %.2lf\n",nullval);
 	printf("CLIP DEM = %i\n",recort);
 	printf("XCOOR MIN VALUE = %lf\n",xlonew);
@@ -427,7 +451,9 @@ double txcoor, tycoor;
     printf("Crit. height %.2f\n", hl);
     printf("Rest. Multiflow %f\n", distran);
     printf("Fill incre. %.2f\n", incre);
+    printf("Force interac. %i\n", forcevar);
     printf("Iterations %i\n", nitera);
+    printf("Writing raster mode %i\n", mod);
     printf("UTM grid zone %i\n", huso);
     printf("Hemisphere %i\n", hemis);
     //-----------
@@ -447,7 +473,7 @@ double txcoor, tycoor;
 		{
 			//printf("%s", msgstxt5);
 			printf("%s\n", wrst(4)); 
-			sprintf(comando, "rm -rf %s*.txt", dir_out);                /*!< delete txt files  */
+			sprintf(comando, "rm -rf %s*.csv", dir_out);                /*!< delete csv files  */
 				printf("Deleted txt files\n\n");
 				system(comando);
 			sprintf(comando, "rm -rf %s*.kml", dir_out);                /*!< delete kml files  */
@@ -543,7 +569,6 @@ int i, j, k, l, colini, rowini;
     rast2    = Make2DDoubleArray (colx, rowy);                          /*!< Store data from different algorithms */
     rast3    = Make2DDoubleArray (colx, rowy);                          /*!< Store data from different algorithms */
 	printf("nx=%i - colx=%i colini=%i colx+colini=%i, ny=%i rowy=%i rowini=%i rowy+rowini=%i\n", nx, colx, colini, (colx+colini), ny, rowy, rowini, (rowy+rowini));
-	//colfin= colx+colini; //final de la primera linea en recorte
     l=0;
     for(j=0;j<ny;j++) //row
     {
@@ -551,18 +576,18 @@ int i, j, k, l, colini, rowini;
         for(i=0;i<nx;i++)
         {           
             fread(&datofl,sizeof(float),1,in);                          /*!< Read data from original DEM */
-            if((datofl[0] > demmax) || (datofl[0] < demmin))datofl[0] = nullval;  /*!< if data is out of z limits, asign null value */
-            	
+            if((datofl[0] > demmax) || (datofl[0] < demmin))datofl[0] = nullval;  /*!< if data is out of z limits, assign null value */
             if(recort != 1)                                             /*!< if not clip section */
 			{
 				topo[i][j]     = (double)datofl[0];  
-				topoless[i][j] = (double)datofl[0];                     /*!< Initialy, this array store the original DEM values */
+				topoless[i][j] = (double)datofl[0];                     /*!< Initially, this array store the original DEM values */
 				rast1[i][j]    = 0;
 				rast2[i][j]    = 0;
 				rast3[i][j]    = 0;
 			}
 			if(recort == 1)                                             /*!< if clip section, new index are used k,l */
 			{	
+				
 				if( (i > colini && i < (colini+colx)) && (j > rowini && j < (rowini+rowy)))  /*!< Check if the index (colum row) are inside the clip area */
 				{
 					if(datofl[0] != nullval)                            /*!< if not null */
@@ -579,12 +604,7 @@ int i, j, k, l, colini, rowini;
 				}
 			}			
         }
-        if(k==colx-1)l++;	                                            /*!< When the row in clip mode is finished, a new colum is added */
-        //if(k==colfin-1)                                                 
-        //{
-		//	l++;
-		//	printf("%i - %i\n", k, l);
-		//}	                                          
+        if(k==colx-1)l++;	                                            /*!< When the row in clip mode is finished, a new colum is added */	                                          
     }    
     fclose(in);
     /**
@@ -604,6 +624,7 @@ int i, j, k, l, colini, rowini;
     invresy = 1/resy;
     resxx = resx*resx;
     resyy = resy*resy;
+    totdemcel = colx * rowy;
     /**
 	* Print results
 	*/
@@ -611,6 +632,7 @@ int i, j, k, l, colini, rowini;
     printf("limits k=%i - l=%i\n", k, l);
 	printf("DEM type: %s\n", cabecera);
     printf("colx  = %5i -- rowy = %5i\n", colx, rowy);
+    printf("Tot cells in DEM = %i\n", totdemcel);
 	printf("xmin = %f -- ymin = %f\n", xmin, ymin);
 	printf("xmax = %f -- ymax = %f\n", xmax, ymax);
     printf("zlo = %10.4f -- zhi = %10.4f\n", zlo, zhi);
@@ -705,7 +727,8 @@ double dato, minz, maxz;
 		for(i=0;i<nx;i++)//todas las columnas
 		{
 			fscanf(in,"%lf", &dato);                                    /*!< Read data from original DEM */
-			if((dato > demmax) || (dato < demmin))dato = nullval;       /*!< if data is out of limits, asign null value */
+			if((dato > demmax) || (dato < demmin))dato = nullval;       /*!< if data is out of limits, assign null value */
+			
 			if(recort != 1)                                             /*!< if not clip section */
 			{
 				topo[i][j]     = (double)dato;	
@@ -752,12 +775,15 @@ double dato, minz, maxz;
     invresy = 1/resy;
     resxx = resx*resx;
     resyy = resy*resy;
+    totdemcel = colx * rowy;
     /**
 	* Print results
 	*/
     printf("Header data DEM file\n");
+    printf("limits k=%i - l=%i\n", k, l);
 	printf("DEM type: %s\n", header);
     printf("colx = %i  -- rowy  = %i\n", colx, rowy);
+    printf("Tot cells in DEM = %i\n", totdemcel);
 	printf("xmin = %f -- ymin = %f\n", xmin, ymin);
 	printf("xmax = %f -- ymax = %f\n", xmax, ymax);
     printf("zlo = %f -- zhi = %f\n", zlo, zhi);
@@ -843,7 +869,7 @@ int read;
 			return 1;
 		}
 		/**
-		* Depending relation between mask dimension and clip area, two posibilities
+		* Depending relation between mask dimension and clip area, two possibilities
 		*/
 		if(nx2 == col2x-2 && ny2 == row2y-2) read = 1;
 		if(nx2  > col2x-2 && ny2  > row2y-2) read = 0;
@@ -862,7 +888,7 @@ int read;
 		for(i=0;i<nx2;i++) //colums
 		{
 			fread(&datafl,sizeof(float),1,in);                          /*!< Read data from mask */
-			if(datafl[0] != 1) datafl[0] = 0;	                        /*!< if z data is out of limits, asign null value */
+			if(datafl[0] != 1) datafl[0] = 0;	                        /*!< if z data is out of limits, assign null value */
 			
 			if(recort != 1)                                             /*!< if not clip section */
 			{
@@ -887,7 +913,7 @@ int read;
 				}	
 			}	
 		}	
-		if(k==col2x-1)l++;                                              /*!< When the row in clip mode is finished, a new colum is added */
+		if(k==col2x-1)l++;                                              /*!< When the row in clip mode is finished, a new column is added */
     }      
     fclose(in);
     /**
@@ -914,18 +940,18 @@ int read;
 	* Print results
 	*/
     printf("limites k=%i - l=%i\n", fink, l);
-    printf("Header data HAZARD file\n");
-	printf("HAZARD type: %s\n", header2);
+    printf("Header data MASK file\n");
+	printf("MASK type: %s\n", header2);
     printf("nx2 = %i  -- ny2  = %i\n", nx2, ny2);    
     printf("col2x  = %5i -- row2y = %5i\n", col2x, row2y);
 	printf("xmin = %f -- ymin = %f\n", xmin, ymin);
 	printf("xmax = %f -- ymax = %f\n", xmax, ymax);
     printf("zlo2 = %f -- zhi2 = %f\n", zlo2, zhi2);
-    printf("HAZARD resolution in resx2 = %f\n", resx2);
-    printf("HAZARD resolution in resy2 = %f\n", resy2);
-    printf("HAZARD invresx2 = %f and invresy2 = %f\n", invresx2, invresy2);
-    printf("HAZARD resxx2 = %f and resyy2 = %f\n", resxx2, resyy2);
-    printf("end read HAZARD file\n");  
+    printf("MASK resolution in resx2 = %f\n", resx2);
+    printf("MASK resolution in resy2 = %f\n", resy2);
+    printf("MASK invresx2 = %f and invresy2 = %f\n", invresx2, invresy2);
+    printf("MASK resxx2 = %f and resyy2 = %f\n", resxx2, resyy2);
+    printf("end read MASK file\n");  
     printf("---------------------------------\n\n");
     return 0;
 }
@@ -990,7 +1016,7 @@ double dato;
 			return 1;
 		}
 		/**
-		* Depending relation between mask dimension and clip area, two posibilities
+		* Depending relation between mask dimension and clip area, two possibilities
 		*/
 		if(nx2 == col2x-2 && ny2 == row2y-2) read = 1;
 		if(nx2  > col2x-2 && ny2  > row2y-2) read = 0;	
@@ -1033,7 +1059,7 @@ double dato;
 				}
 			}
 		}
-		if(k==col2x-1)l++;		                                        /*!< When the row in clip mode is finished, a new colum is added */
+		if(k==col2x-1)l++;		                                        /*!< When the row in clip mode is finished, a new column is added */
     }    
     fclose(in);
     /**
@@ -1060,17 +1086,17 @@ double dato;
 	* Print results
 	*/
     printf("limites k=%i - l=%i\n", fink, l);
-    printf("Header data HAZARD file\n");
-	printf("HAZARD type: %s\n", header2);
+    printf("Header data MASK file\n");
+	printf("MASK type: %s\n", header2);
 	printf("col2x = %i  -- row2y  = %i\n", colx, rowy);
 	printf("xmin = %f -- ymin = %f\n", xmin, ymin);
 	printf("xmax = %f -- ymax = %f\n", xmax, ymax);
     printf("zlo2 = %f -- zhi2 = %f\n", zlo2, zhi2);
-    printf("HAZARD resolution in resx2 = %f\n", resx2);
-    printf("HAZARD resolution in resy2 = %f\n", resy2);
-    printf("HAZARD invresx2 = %f and invresy2 = %f\n", invresx2, invresy2);
-    printf("HAZARD resxx2 = %f and resyy2 = %f\n", resxx2, resyy2);
-    printf("end read HAZARD file\n");  
+    printf("MASK resolution in resx2 = %f\n", resx2);
+    printf("MASK resolution in resy2 = %f\n", resy2);
+    printf("MASK invresx2 = %f and invresy2 = %f\n", invresx2, invresy2);
+    printf("MASK resxx2 = %f and resyy2 = %f\n", resxx2, resyy2);
+    printf("end read MASK file\n");  
     printf("---------------------------------\n\n");
     return 0;
 }
@@ -1105,6 +1131,105 @@ double** theArray;
 	return theArray;
 } 
 
+/*! DINAMIC SINGLE ARRAYS */
+double* MakeSingleArray(int arraySize) 
+{	
+double* theArray;
+	theArray = (double*) malloc(arraySize*sizeof(double));
+	if(theArray== NULL)printf("error 2\n");
+
+	return theArray;
+}
+
+/*! RESET ARRAYS */
+void resarray(int typ)
+{
+int i, j;	
+int xcol, yrow;
+
+	if(typ == 0)
+	{
+		/**
+		* Reset control raster to 0 (rast2)
+		*/
+		for(i=0;i<tocelflw;i++)
+		{
+			xcol = inxdir[i];
+			yrow = inydir[i];
+			rast2[xcol][yrow] = 0; 
+			inxdir[i] = 0;
+			inydir[i] = 0;
+		}
+	}
+	if(typ == 1)
+	{
+		/**
+		* Reset control raster to 0 (rast2), reset only selected cells
+		*/
+		for(i=0;i<tocelflw;i++)
+		{
+			xcol = inxdir[i];
+			yrow = inydir[i];
+			rast1[xcol][yrow] = 0;
+			rast2[xcol][yrow] = 0; 
+			rast3[xcol][yrow] = 0;
+			inxdir[i] = 0;
+			inydir[i] = 0;
+		}
+	}
+	if(typ == 2)
+	{
+		/**
+		* Reset control raster to 0 (rast2) Reset whole matrix
+		*/
+		for(j=0;j<rowy;j++)
+		{
+			for(i=0;i<colx;i++)
+			{
+				rast1[i][j] = 0;
+				rast3[i][j] = 0;
+			}	
+		}	
+	}
+	if(typ == 3)
+	{
+		/**
+		* Reset control raster to 0 (rast2) Reset whole matrix
+		*/
+		for(j=0;j<rowy;j++)
+		{
+			for(i=0;i<colx;i++) rast2[i][j] = 0;	
+		}	
+	}
+	if(typ == 4)
+	{	
+		for(i=0;i<sizearray;i++)
+		{
+		    inxdir[i] = 0;
+			inydir[i] = 0;
+		}
+	}
+	if(typ == 5)
+	{
+		for(i=0;i<totalpt;i++)
+        {
+			caucerio[i].cjerar  = 0;
+			caucerio[i].crio    = 0;
+			caucerio[i].ctramo  = 0;
+			caucerio[i].cidpt   = 0; 
+			caucerio[i].cdist   = 0;
+			caucerio[i].cxcoor  = 0;
+			caucerio[i].cycoor  = 0;
+			caucerio[i].czcoor  = 0;
+			caucerio[i].clong   = 0;
+			caucerio[i].clat    = 0;
+			caucerio[i].cdx     = 0;
+			caucerio[i].cdt     = 0;
+			caucerio[i].quality = 0;
+		}	
+	}			 
+}
+
 /*! RANDMON VARIATE GENERATOR */
 double box_muller(double m, double s)	/* normal random variate generator */
 {				                        /* mean m, standard deviation s */
@@ -1124,10 +1249,10 @@ double x1, x2, w, y1;
 void campana(void)
 {
 int i;
-    dlbox = distran * resx;
+    dlbox = 100 * resx;
     srand(time(NULL));
     for(i=0;i<1000;i++)gauss[i] = (int)(box_muller(0.0,dlbox)/resx);
-    dlbox = distran * 2  * resx;
+    dlbox = 100 * 2  * resx;
     for(i=0;i<1000;i++)gaussb[i] = (int)(box_muller(0.0,dlbox)/resx);
 }
 
@@ -1196,7 +1321,8 @@ double latrad;
 
 /*! GET Z COORDINATES FROM 3X3 MOVING WINDOW */
 int getmovingcell(int ix, int jy, int withdif)
-{	
+{
+float hl3;		
 	/**
 	* Array index named used and 3x3 moving window and equivalent orientation
 	* || a b c  || 9  8  7  ||  i-1 j+1 : i j+1 : i+1 j+1  ||  t5  t2 t4  ||  64  128  1
@@ -1207,8 +1333,13 @@ int getmovingcell(int ix, int jy, int withdif)
 	/**
 	* Get z values from center and 8 neighbouring cells
 	*/
-	if (withdif == 1)c5 = hl+topoless[ix][jy];                          /*!< Get z center cell value with height variation (flow path) */
 	if (withdif == 0)c5 = topoless[ix][jy];                             /*!< Get z center cell original value (morphometric) */
+	if (withdif == 1)c5 = hl+topoless[ix][jy];                          /*!< Get z center cell value with height variation (flow path) */
+	if (withdif == 2)
+	{
+		hl3 = hl + hl2;
+		c5 = hl3+topoless[ix][jy];                          /*!< Get z center cell value with height variation (flow path) */
+	}	
 	//octogonal
 	c6 = topoless[ix-1][jy];   //d - 6
 	top[0] = c6;
@@ -1228,7 +1359,7 @@ int getmovingcell(int ix, int jy, int withdif)
 	c1 = topoless[ix+1][jy-1]; //i - 1
 	top[7] = c1;
 	/**
-	* Get z-diff from z center cell and its 8 neighbouring cells
+	* Get z-diff from z center cell and its 8 neighboring cells
 	*/
 	h[0] = c5-c6; 
 	h[1] = c5-c4;
@@ -1253,7 +1384,7 @@ double difx, dify, demx, demy;
     difx = vx - xmin;                                                   /*!< Calc dif in x */
 	vcol = (int)(difx / resx);                                          /*!< Calc col index - first step */
 	demx = (vcol * resx) + xmin;                                        /*!< Recalc coordinate again */
-	if ((vx - demx) > (resx/2))vcol++;                                  /*!< if diference between original x coordinate and the new one ... */     																  /*!<is less than the midel of resx then increase the col index */
+	if ((vx - demx) > (resx/2))vcol++;                                  /*!< if difference between original x coordinate and the new one ... */     																  /*!<is less than the middle of resx then increase the col index */
 	/**
 	* Get row index
 	*/
@@ -1264,10 +1395,27 @@ double difx, dify, demx, demy;
 
 }
 
-/*! DEPRESION FILL FUNCTION FOR FLOW PATH MODELS */
+/*! GET X AND Y FROM MATRIX INDEX */
+void get_coor(int col, int row)
+{
+	globx = 0;
+	globy = 0;
+	/**
+	* Get xcoor 
+	*/
+	globx = xmin + (col * resx);
+	/**
+	* Get ycoor
+	*/
+	globy = ymin + (row * resy);
+
+}
+
+/*! DEPRESSION FILL FUNCTION FOR FLOW PATH MODELS */
 void calc_levelfill(int col, int row)
 {
-int i, j, l, n, celda, hl3;	
+int i, j, l, n, celda;	
+float hl3;
 double h0, h2[8], alt;
 	
 	for(i=0;i<8;i++)h2[i]=0;
@@ -1277,27 +1425,26 @@ double h0, h2[8], alt;
     hl3 = hl + hl2;
 	h0  = hl3+topoless[col][row];                                       /*!< New critical height */
 	/**
-	* check if neighbouring cells were previously selected 
+	* check if neighboring cells were previously selected 
 	* if not, recalc z diff
 	*/
-	if(rast2[col-1][row]  == 0)h2[0] = h0-topoless[col-1][row];
-	if(rast2[col-1][row]  == 1)h2[0] = 0;
-	if(rast2[col+1][row]  == 0)h2[1] = h0-topoless[col+1][row];
-	if(rast2[col+1][row]  == 1)h2[1] = 0;
-	if(rast2[col][row+1]  == 0)h2[2] = h0-topoless[col][row+1];
-	if(rast2[col][row+1]  == 1)h2[2] = 0;
-	if(rast2[col][row-1]  == 0)h2[3] = h0-topoless[col][row-1];
-	if(rast2[col][row-1]  == 1)h2[3] = 0;
+	if(rast2[col-1][row]  == 0)h2[0] = h0-topoless[col-1][row]; //c6
+	if(rast2[col-1][row]  >= 1)h2[0] = 0;
+	if(rast2[col+1][row]  == 0)h2[1] = h0-topoless[col+1][row]; //c4
+	if(rast2[col+1][row]  >= 1)h2[1] = 0;
+	if(rast2[col][row+1]  == 0)h2[2] = h0-topoless[col][row+1]; //c8
+	if(rast2[col][row+1]  >= 1)h2[2] = 0;
+	if(rast2[col][row-1]  == 0)h2[3] = h0-topoless[col][row-1]; //c2
+	if(rast2[col][row-1]  >= 1)h2[3] = 0;
 	//---
-	if(rast2[col+1][row+1] == 0)h2[4] = h0-topoless[col+1][row+1];
-	if(rast2[col+1][row+1] == 1)h2[4] = 0;
-	if(rast2[col-1][row+1] == 0)h2[5] = h0-topoless[col-1][row+1];
-	if(rast2[col-1][row+1] == 1)h2[5] = 0;
-	if(rast2[col-1][row-1] == 0)h2[6] = h0-topoless[col-1][row-1];
-	if(rast2[col-1][row-1] == 1)h2[6] = 0;
-	if(rast2[col+1][row-1] == 0)h2[7] = h0-topoless[col+1][row-1];
-	if(rast2[col+1][row-1] == 1)h2[7] = 0;
-	
+	if(rast2[col+1][row+1] == 0)h2[4] = h0-topoless[col+1][row+1]; //c7
+	if(rast2[col+1][row+1] >= 1)h2[4] = 0;
+	if(rast2[col-1][row+1] == 0)h2[5] = h0-topoless[col-1][row+1]; //c9
+	if(rast2[col-1][row+1] >= 1)h2[5] = 0;
+	if(rast2[col-1][row-1] == 0)h2[6] = h0-topoless[col-1][row-1]; //c3
+	if(rast2[col-1][row-1] >= 1)h2[6] = 0;
+	if(rast2[col+1][row-1] == 0)h2[7] = h0-topoless[col+1][row-1]; //c1
+	if(rast2[col+1][row-1] >= 1)h2[7] = 0;
 	j    = 0;
 	n    = 0;
 	sum1 = 0;
@@ -1336,9 +1483,9 @@ double h0, h2[8], alt;
 			{
 				sum1 += h2[l];                                          /*!< Sum all z-diff higher than 0 */
 				/**
-				* Depending on neighbouring cell position
+				* Depending on neighboring cell position
 				*/
-				if(l <  4)h2[l] = h2[l] / (resx / 3);                   /*!< Get slope-grandient */
+				if(l <  4)h2[l] = h2[l] / (resx / 3);                   /*!< Get slope-gradient */
 				if(l >= 4)h2[l] = h2[l] / (resx / 2);
 				/**
 				* Get max s-gradient value
@@ -1349,7 +1496,12 @@ double h0, h2[8], alt;
 					celda = l;                                          /*!< Set cell number */
 				}	
 			}
+		}
+		if(flowtyp == 3)
+		{	
+			h[l] = h2[l]; 
 		}	
+		
 	}
 	/**
 	* According to surface type, set sum1 var
@@ -1431,7 +1583,7 @@ int i;
     /**
 	* FIFO initialitation. 
 	*/
-    for(i=0;i<size;i++) 
+    for(i=0;i<SIZE;i++) 
     {
         FIFO[i][0] = -1;                                                /*!< -1 means empty cell */
         FIFO[i][1] = -1;
@@ -1452,9 +1604,9 @@ int i;
         FIFO[i][1] = FIFO[i+1][1];
         i++;
     }while(FIFO[i][0] != -1);
-    FIFO[size-1][0] = -1;
-    FIFO[size-1][1] = -1;
-    puntero = i-1;                                                      /*!< 1 must be subtracted to avoid the insertion of -1 values in the midel */
+    FIFO[SIZE-1][0] = -1;
+    FIFO[SIZE-1][1] = -1;
+    puntero = i-1;                                                      /*!< 1 must be subtracted to avoid the insertion of -1 values in the middle */
 }
 //----------------------------------------------------------------------
 /*! FIFO LOAD FUNCTION */
@@ -1463,7 +1615,7 @@ void fifocarga(void)
     /**
 	* Add values to FIFO 
 	*/
-    if(puntero < size)
+    if(puntero < SIZE)
     {
         FIFO[puntero][0] = fcolm;
         FIFO[puntero][1] = frowm;
@@ -1471,6 +1623,61 @@ void fifocarga(void)
     }
 }
 //----------------------------------------------------------------------
+
+/*!CALL WRITING RASTER ACCORDING TO MODEL */
+void call_writeraster(void)
+{
+int i,j;
+	/**
+	* Write the ouput raster files according to the flow path algorithm selected
+	*/
+	if(flowtyp == 1)
+	{
+		maxval = maximun;                                           /*!< Assign z max value for raster head data */
+		chksing3 = write_rast1(10, mod);                                 /*!< Write flow path in sum mode */
+		maxval = 1;                                                 /*!< Assign z max value for raster head data */
+		chksing4 = write_rast3(10, mod);                                 /*!< Write flow path */
+		if(chksing3 == 1 || chksing4 == 1)chksum++;
+	}
+	if(flowtyp == 2)
+	{
+		maxval = maximun;                                           /*!< Assign z max value for raster head data */
+		chksing3 = write_rast1(11, mod);                                 /*!< Write flow path in sum mode */
+		maxval = 1;                                                 /*!< Assign z max value for raster head data */
+		chksing4 = write_rast3(11, mod);                                 /*!< Write flow path */
+		if(chksing3 == 1 || chksing4 == 1)chksum++;
+	}
+	if(flowtyp == 3)	
+	{
+		/**
+		* Reading rast3 matrix to change log scale
+		*/
+		for(j=0;j<rowy;j++)
+		{
+			for(i=0;i<colx;i++)
+			{
+				/**
+				* Change to logarithmic scale
+				*/
+				if(rast3[i][j]>0)rast3[i][j] = log(rast3[i][j]);        /*!< changing rast3 value */	
+			}	
+		}
+		maxval = 1;                                                 /*!< Assign z max value for raster head data */
+		chksing3 = write_rast1(12, mod);                                 /*!< Write Montecarlo flow path */
+		chksing4 = write_rast3(12, mod);                                 /*!< Write Montecarlo flow path Logscale */
+		if(chksing3 == 1 || chksing4 == 1)chksum++;
+	}
+	if(flowtyp == 4)	
+	{
+		maxval = 1;                                                     /*!< Assign z max value for raster head data */
+		chksing3 = write_rast1(13, mod);                                /*!< Write Multiflow path */
+		maxval = maximun;                                           
+		chksing4 = write_rast3(13, mod);                                /*!< Write Multiflow path Sum*/ 
+		if(chksing3 == 1 || chksing4 == 1)chksum++;
+	}
+
+
+}
 
 //---------------------------------------------------------------------------------------
 //***************************************************************************************
@@ -1518,7 +1725,7 @@ double tx, ty, tz, tnew, supmask;
 				{
 					/**
 					* Write directly in the output txt file
-					* The structure of the output file has the colum for the new z coordinate
+					* The structure of the output file has the column for the new z coordinate
 					*/
 					if(k==0)fprintf(file,"%s\n", "XCORR YCOOR OLDZCOOR NEWZCOOR");
 					fprintf(file, "%lf %lf %lf %lf\n",
@@ -1547,7 +1754,7 @@ char texto[256];
 int i, j;
 double txcorr, tycorr, tzoldcorr, tznewcorr;
 	i = 0;                                                              /*!< count used points */
-	j = 0;                                                              /*!< count readed points */
+	j = 0;                                                              /*!< count read points */
 	volummask = 0;
 	/**
 	* The output filename in step 1 must be kept 
@@ -1623,7 +1830,6 @@ int fix_sinks(void)
 FILE *file;	
 int i, j, k, l, m, o, q, ci, rj;
 int tisloate;
-//int niqu, nalt;
 double h0,  diff;
 double txcoor, tycoor;
 double dzdx, dzdy, aspect, cell, celda;
@@ -1656,7 +1862,6 @@ float nrun;
 		{
 			for(i=0;i<colx;i++) //row
 			{
-				//limites celda
 				if(( i>3 && i<colx-3 ) && ( j>3 && j<rowy-3 ))          /*!< if array index are in working area */
 				{
 					h0  = topo[i][j];                                   /*!< get z coordinate value */
@@ -1664,7 +1869,7 @@ float nrun;
 					{
 						getmovingcell(i, j, 0);                         /*!< get 3x3 moving cell z values */
 						calc_isosink(i, j);                             /*!< check if cell is a sink */
-						l = 0;                                          /*!< count neighbouring cells with z value higher */
+						l = 0;                                          /*!< count neighboring cells with z value higher */
 						q = 0;                                          /*!< modification mode used */
 						if(result == 8)                                 /*!< if center cell is a sink */
 						{	
@@ -1677,11 +1882,11 @@ float nrun;
 							if(metsink == 2)                            /*!< if algorithm correction is activated */
 							{
 								/**
-								* Check if there is not another sink in the vecinity 16 cells 
+								* Check if there is not another sink in the 16 neighboring cells 
 								*/
 								for(k=0;k<8;k++)
 								{
-									if (k == 0)                         /*!< if z-diff in cero is higher than 0 */
+									if (k == 0)                         /*!< if z-diff in zero is higher than 0 */
 									{
 										ci = i--;                       /*!< Change column index */
 										rj = j;                         /*!< Change column index */
@@ -1721,7 +1926,7 @@ float nrun;
 										ci = i++;                                
 										rj = j--;                                
 									}
-									calc_isosink(ci, rj);               /*!< check if vecity cell is a sink */
+									calc_isosink(ci, rj);               /*!< check if neighboring cell is a sink */
 									if (result == 8) l++; 
 								}	
 								if (l  >  0) tisloate = 0;              /*!< sink cell not isolate */
@@ -1758,7 +1963,7 @@ float nrun;
 									if (cell >= 292.5 && cell <  337.5) celda = top[5];
 									if (cell >= 337.5 && cell <= 360.0) celda = top[2];
 									/**
-									* if neighbouring cell is lower than the center cell 
+									* if neighboring cell is lower than the center cell 
 									*/
 									if(h0 > celda)
 									{
@@ -1767,7 +1972,7 @@ float nrun;
 										q = 1;
 									}
 									/**
-									* if neighbouring cell is equal than the center cell 
+									* if neighboring cell is equal than the center cell 
 									*/
 									if(celda == h0)
 									{
@@ -1777,12 +1982,12 @@ float nrun;
 										q = 2;
 									}	
 									/**
-									* Check if the new center cell produce new surface depressions around (16 vecinity cells) 
+									* Check if the new center cell produce new surface depressions around (16 neighboring cells) 
 									*/
 									o = 0;
 									for(k=0;k<8;k++)
 									{
-										if (k == 0)                     /*!< if z-diff in cero is higher than 0 */
+										if (k == 0)                     /*!< if z-diff in zero is higher than 0 */
 										{
 											ci = i--;                   /*!< Change column index */
 											rj = j;                     /*!< Change column index */
@@ -1838,7 +2043,7 @@ float nrun;
 								}	
 								if (tisloate == 0)                      /*!< if sink cell is not isolate */
 								{
-									diff = 0;                           /*!< do not chage the z value */
+									diff = 0;                           /*!< do not change the z value */
 									q    = 0;
 								}
 							}
@@ -1877,7 +2082,7 @@ float nrun;
 	maxval = zhi;                                                       /*!< Assign z max value for raster head data */	
 	if(metsink == 2) 
 	{
-		chksink2 = write_newdem(1);                                     /*!< if modify method is activitaed, write the new DEM */
+		chksink2 = write_newdem(1);                                     /*!< if modify method is activated, write the new DEM */
 		if (chksink2 == 1)chksum++;                                     /*!< if error creating output newdem file */	
 	}	
 	return 0;	
@@ -1885,15 +2090,21 @@ float nrun;
 }
 
 /*! SLOPE-ASPECT CALCULATION (write on direct and rast2) */
-void calc_saspect(void)
+int calc_saspect(void)
 {
-int i, j, k, n, o;
+FILE *file;
+char nom_hist[256];	
+int i, j, k, n;
 int celda;
-double h0, alt, superf, aspect, cell;
+double h0, alt, superf, aspect, cell, aspor[10];
 double dzdx, dzdy;
 	
 	printf("Calculing slope-Aspect method %i\n", metasp);
-	for(k=0;k<10;k++) cuenta[k] = 0;                                    /*!< Reset values, count cells by s-aspect class */
+	for(k=0;k<10;k++)
+	{
+		cuenta[k] = 0;                                    /*!< Reset values, count cells by s-aspect class */
+		aspor[k]  = 0; 
+	}	
 	for(j=0;j<rowy;j++) //column
     {
         for(i=0;i<colx;i++) //row
@@ -1901,7 +2112,6 @@ double dzdx, dzdy;
 			alt = 0;
 			n   = 0;                                                    /*!< Count if cell has slope-aspect value  */
 			h0  = topoless[i][j];                                       /*!< Get center cell z value  */
-			//limites celda
 			if(( i>3 && i<colx-3 ) && ( j>3 && j<rowy-3 ))              /*!< if array index are inside working area  */
 			{
 				if(h0 != nullval)                                       /*!< if z coordinate value is not null */     
@@ -1962,11 +2172,11 @@ double dzdx, dzdy;
 					}	
 					if(n > 0) 											/*!< if cell is not flat or null  */
 					{
-						switch(celda) 									/*!< get the spill neighbouring value cell  */
+						switch(celda) 									/*!< get the spill neighboring value cell  */
 						{
 						case 0: 
 							rast2[i][j] = 32; 							/*!< Save s-aspect in class */
-							cuenta[5]++;                                /*!< Cout total cells with class 128 */
+							cuenta[5]++;                                /*!< Count total cells with class 128 */
 							break;
 						case 1:
 							rast2[i][j] = 2; 
@@ -2001,39 +2211,90 @@ double dzdx, dzdy;
 				}
 				if(h0 == nullval)                                       /*!< if cell is null  */
 				{
-					rast2[i][j] = nullval;                              /*!< Thye null valued is transfered  */
+					rast2[i][j] = nullval;                              /*!< The null valued is transfered  */
 					rast1[i][j] = nullval;	 
+					cuenta[9]++;
 				}	
 			}
 		}			
 	}
-	int* val = (int[10]){1,2,4,8,16,32,64,128,255};                     /*!< array with class values  */ 
-	for(o=0;o<9;o++)
-	{
-		superf = (cuenta[o] * resx * resy)/1000000;                      /*!< Calc total surface by s-aspect class  */
-		printf("Total cells %i, surface %.2lf km2 with s-aspect %i\n", cuenta[o], superf, val[o]);
-	}
 	maxval = 255;                                                       /*!< Assign z max value for raster head data */
-	chkasp1 = write_rast2(2);                                           /*!< Write S-aspect class */
+	chkasp1 = write_rast2(2, 0);                                        /*!< Write S-aspect class */
 	if(chkasp1 == 1)chksum++;                                           /*!< if error creating output rast2 file */
 	maxval = 360;                                                       /*!< Assign z max value for raster head data */
 	if(metasp == 2)
 	{
-		write_rast1(2);	                                                /*!< S-aspect degree raster is only written in mode 2  */
+		write_rast1(2, 0);	                                            /*!< S-aspect degree raster is only written in mode 2  */
 		if(chkasp2 == 1)chksum++;                                       /*!< if error creating output rast1 file */
-	}	
+	}
+	int* val = (int[10]){1,2,4,8,16,32,64,128,255,-9999};               /*!< array with class values  */	
+	/**
+	* Write histograms
+	*/
+	printf("\nWrite histograms - slope-aspect %i\n", metasp);
+	i = 0;
+	sprintf(nom_hist, "%sS-aspect_Histo_%i.txt", dirfinout, metasp);
+    if((file = fopen(nom_hist,"w"))== NULL)
+    {
+        printf("-------ERROR open file--------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+	    return 1;
+    }
+    else
+    {	 
+	    fprintf(file,"%s\n",
+	         "id freq perc surf"); //primera linea
+        for(i=0;i<10;i++)
+        {
+			/**
+			* Calc normalized values
+			*/
+			if(cuenta[i] == 0)aspor[i]=0;
+			if(cuenta[i]  > 0)aspor[i]= (double)cuenta[i] / (double)totdemcel;
+			superf = (cuenta[i] * resx * resy)/1000000;					/*!< Calc total surface by s-aspect class in km2 */
+			printf("Total cells %i, surface %.2lf km2 with s-aspect %i\n", cuenta[i], superf, val[i]);
+			/**
+			* Write final values
+			*/
+			fprintf(file,"%i %i %lf %lf\n",
+				i,
+				cuenta[i],
+				aspor[i],
+				superf
+				);
+		}	
+    } 
+    fclose(file);
+    return 0;
 }		
 
 /*! SLOPE-GRADIENT CALCULATION (write on rast1 rast2 rast3) */
-void calc_sgrad(void)
+int calc_sgrad(void)
 {
-int i, j, k;
-double h0, topo[8];
+FILE *file;
+char nom_hist[256];	
+int i, j, k, degslo[19];
+double h0, topo[8], degpor[19];
 double fx, fy, fx2, fy2, rise;
-double slprad, slpdeg;
+double slprad, slpdeg, superf;
 double inival, finx, finz;	
 	
-	printf("Calculing slope-gradient method %i\n", metslop);
+	printf("Calculating slope-gradient method %i\n", metslop);
+	/**
+	* Reset to 0 to calculate the histogram
+	*/
+	for(i=0;i<19;i++)
+	{
+		degslo[i] = 0;
+		degpor[i] = 0;
+	}
+	/**
+	* Start slope calculation
+	*/	
 	for(j=0;j<rowy;j++)
     {
         for(i=0;i<colx;i++)
@@ -2151,8 +2412,8 @@ double inival, finx, finz;
 								if(k==7)finz = fabs(c5-c4);
 							}	
 						}
-						fx = finx; //distancia
-						fy = finz; //dif altura
+						fx = finx; //distance
+						fy = finz; //dif height
 					}
 					/**
 					* Simple difference Simple-D
@@ -2211,12 +2472,35 @@ double inival, finx, finz;
 					if(slpdeg >= 15 && slpdeg < 30)  rast2[i][j] = 5;    /*!< Moderately steep - Moderadamente escarpado */
 					if(slpdeg >= 30 && slpdeg < 60)  rast2[i][j] = 6;    /*!< Steep - Escarpado */
 					if(slpdeg >= 60)                 rast2[i][j] = 7;    /*!< Very steep Muy escarpado */	
+					/**
+					* Classifying s-gradient histogram frequency
+					*/
+					if(slpdeg == 0)                  degslo[0]++;    
+					if(slpdeg  > 0  && slpdeg < 5)   degslo[1]++;    
+					if(slpdeg >= 5  && slpdeg < 10)  degslo[2]++;     
+					if(slpdeg >= 10 && slpdeg < 15)  degslo[3]++;     
+					if(slpdeg >= 15 && slpdeg < 20)  degslo[4]++;     
+					if(slpdeg >= 20 && slpdeg < 25)  degslo[5]++;    
+					if(slpdeg >= 25 && slpdeg < 30)  degslo[6]++;     
+					if(slpdeg >= 30 && slpdeg < 35)  degslo[7]++;     
+					if(slpdeg >= 35 && slpdeg < 40)  degslo[8]++;     
+					if(slpdeg >= 40 && slpdeg < 45)  degslo[9]++;     
+					if(slpdeg >= 45 && slpdeg < 50)  degslo[10]++;   
+					if(slpdeg >= 50 && slpdeg < 55)  degslo[11]++;      
+					if(slpdeg >= 55 && slpdeg < 60)  degslo[12]++;      
+					if(slpdeg >= 60 && slpdeg < 65)  degslo[13]++;      
+					if(slpdeg >= 65 && slpdeg < 70)  degslo[14]++;      
+					if(slpdeg >= 70 && slpdeg < 75)  degslo[15]++;      
+					if(slpdeg >= 75 && slpdeg < 80)  degslo[16]++;         
+					if(slpdeg >= 80 && slpdeg < 85)  degslo[17]++; 
+					if(slpdeg >= 85 )                degslo[18]++;	
 				}	
 				if(h0 == nullval)                                       /*!< if z = null value */
 				{
 					rast1[i][j] = nullval;                              /*!< save null value */
 					rast2[i][j] = nullval;
 					rast3[i][j] = nullval;
+					degslo[18]++;
 				}
 			}
 		}
@@ -2225,14 +2509,56 @@ double inival, finx, finz;
 	* Calling raster writting functions
 	*/
 	maxval = 90;                                                        /*!< Assign z max value for raster head data */
-	chkslop1 = write_rast1(3);                                          /*!< Write raster in Degrees */	
+	chkslop1 = write_rast1(3, 0);                                       /*!< Write raster in Degrees */	
 	if(chkslop1 == 1)chksum++;                                          /*!< if error creating output rast1 file */
 	maxval = 7;                                                         /*!< Assign z max value for raster head data */	
-	chkslop2 = write_rast2(3);                                          /*!< Write raster in Class */
+	chkslop2 = write_rast2(3, 0);                                       /*!< Write raster in Class */
 	if(chkslop2 == 1)chksum++;                                          /*!< if error creating output rast2 file */	
 	maxval = 100;                                                       /*!< Assign z max value for raster head data */
-	chkslop3 = write_rast3(3);                                          /*!< Write raster in Percentages */
+	chkslop3 = write_rast3(3, 0);                                       /*!< Write raster in Percentages */
 	if(chkslop3 == 1)chksum++;                                          /*!< if error creating output rast1 file */	
+	/**
+	* Write histograms
+	*/
+	printf("\nWrite histograms - slope-gradient %i\n", metslop);
+	i = 0;
+	sprintf(nom_hist, "%sS-gradie_Histo_%i.txt", dirfinout, metslop);
+    if((file = fopen(nom_hist,"w"))== NULL)
+    {
+        printf("-------ERROR open file--------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+        printf("-----------ERROR--------------\n");
+	    return 1;
+    }
+    else
+    {	 
+	    fprintf(file,"%s\n",
+	         "id freq perc surf"); //primera linea
+        for(i=0;i<19;i++)
+        {
+			/**
+			* Calc normalized values
+			*/
+			if(degslo[i] == 0)degpor[i]=0;
+			if(degslo[i]  > 0)degpor[i]= (double)degslo[i] / (double)totdemcel;
+			superf = (degslo[i] * resx * resy)/1000000;					/*!< Calc total surface by s-gradient class in km2 */
+			printf("Total cells %i, surface %.2lf km2 with s-grad class %i\n", degslo[i], superf, i);
+			/**
+			* Write final values
+			*/
+			fprintf(file,"%i %i %lf %lf\n",
+				i,
+				degslo[i],
+				degpor[i],
+				superf
+				);
+		}	
+    } 
+    fclose(file);
+    return 0;
 }
 
 //---------------------------------------------------------------------------------------
@@ -2245,11 +2571,13 @@ double inival, finx, finz;
 
 /*! SINGLE FLOW PATH LHM OR SSM (1 2) */
 void calc_singflow(void)
-{
-int i, j, m, n, o, maxbdpt;
+{	
+int i, j, m, n, o, maxbdpt, ext;
 unsigned char done;
 double ll, tx, ty, tz;
 
+	iniepoch = clock();                                                 /*!< Get init time */
+	if(nfile == 0) firsepoch = clock();
 	done = 0;                                                           /*!< Control the loop */
 	m    = 0;                                                           /*!< Count points/cells per flow path crossed */
 	o    = 0;                                                           /*!< Count sinks crossed */
@@ -2259,38 +2587,44 @@ double ll, tx, ty, tz;
 	j= nyc;                                                             /*!< Init row index */
 	rast2[i][j] = 1;                                                    /*!< Starting point value */
 	rast1[i][j] = 1;                                                    /*!< Starting point value */
+	ext=0;
 	//-----------------
 	do
 	{
 		n = 0;                                                          /*!< Count how many times the z is increased when sink */
-		/*
-		getmovingcell(i, j);                                             get 3x3 moving cell z values 
-		calc_isosink(i, j);
-		if(result == 8)
-		{
-			sum1 = -2;
-			col1 = i;
-			row1 = j;
-		}	
-		if(result < 8)
-		*/
 		calc_levelfill(i, j);								            /*!< Get a new cell in the flow path */
 		                                                        
-		if(row1<5||row1>rowy-5||col1<5||col1>colx-5||topoless[col1][row1]== 0)done = 0;    /*!< if the new cell index is out of limits - stop loop */
+		if(row1<5||row1>rowy-5||col1<5||col1>colx-5||topoless[col1][row1]== 0||topoless[col1][row1]== nullval)done = 0;    /*!< if the new cell index is out of limits - stop loop */
 		else
 		{
-			if(sum1 == -1)break;                                        /*!< if all neighbouring cell were used before - stop */	
+			if(sum1 == -1)
+			{
+				ext = 1;
+				break;                                        			/*!< if all neighboring cell were used before - stop */	
+			}	
 			if(sum1 == -2 || sum1 == -3)                                /*!< if the cell is a sink */
 			{
-				hl2 += incre;                                           /*!< increase the z+critical height value using Fill Increse var */
-				calc_levelfill(i, j);                                   /*!< Get a new cell in the flow path */
-				n++;
+
+				if(incre > 0)												/*!< if fill increase is higher than 0 */
+				{
+					hl2 += incre;                                       /*!< increase the z+critical height value using Filling Increase var */
+					calc_levelfill(i, j);                               /*!< Get a new cell in the flow path */
+					n++;
+				}
+				else break;		
 			}	
 			if(sum1 > 0)                                                /*!< if the cell is not a sink */
 			{
 				tx = xmin + (col1*resx);                                /*!< getting the coordinate from array index */
 				ty = ymin + (row1*resy);
 				tz = topoless[col1][row1];                              /*!< getting original z value */
+				//------------------------
+				if (tz == nullval) 
+				{
+					ext = 3;
+					break;								/*!< Avoid z null values */
+				}	
+				//------------------------
 				/**
 				* Saving data in caucerio struc 
 				*/
@@ -2306,12 +2640,22 @@ double ll, tx, ty, tz;
 				caucerio[m].cdx     = distpt;
 				caucerio[m].cdt     = 0;
 				caucerio[m].quality = n;
-				rast2[col1][row1]   = 1;                                /*!< this cell was selected */
 				rast1[col1][row1]   = m;                                /*!< total cells selected */
+				rast2[col1][row1]   = 1;                                /*!< Control raster - this cell was selected */
+				rast3[col1][row1]   = 1;								/*!< Final results - this cell was selected */
+				
+				inxdir[m] = col1;                                       /*!< Save array index from selected cells */
+				inydir[m] = row1;
+				
 				if(maximun <  rast1[i][j])maximun = rast1[i][j];        /*!< Get the maximum value */
-				ll = sqrt((col1-nxc)*(col1-nxc)+(row1-nyc)*(row1-nyc)); /*!< Calc distance from cell to init cell */
-				if(ll>lmax)done = 0;                                    /*!< If distance is higher than Max. Dist - stop loop */
-				else done = 1;       
+				ll = sqrt((tx-xc)*(tx-xc)+(ty-yc)*(ty-yc)); /*!< Calc distance from cell to init cell */
+				//--------
+				if(ll>lmax)
+				{
+					ext = 4;
+					done = 0;                                    /*!< If distance is higher than Max. Dist - stop loop */
+				}	
+				else done = 1;      
 				j = row1;                                               /*!< reset the new array index values */
 				i = col1;
 				if(n>0)o++;                                             /*!< if sink, add count */
@@ -2320,8 +2664,14 @@ double ll, tx, ty, tz;
 				hl2 = 0;                                                /*!< Reset Fill increase value */
 			}
 		}	
-		if(m == maxbdpt)break;                                          /*!< if total points allowed per flow path is reached */
+		if(m == maxbdpt)
+		{
+			ext = 5;
+			break;                                          /*!< if total points allowed per flow path is reached */
+		}	
 	}while(done>0);                                                     /*!< Keep the loop on while done > 0 */
+	printf("nfile %i why %i hl2 %f\n", nfile, ext, hl2);
+	resflow = m;
 	if(m>0)                                                             /*!< If the flow path exist */
 	{
 		ok = 1;
@@ -2329,9 +2679,9 @@ double ll, tx, ty, tz;
 		if(ncentros <= OUTPUTPATH)	                                    /*!< If total z points are less than ... */
 		{
 			/**
-			* Writting output txt and kml files
+			* Writing output txt and kml files
 			*/
-			sprintf(nom_trayec, "%suflowpath%i_%i.txt", dirfinout, flowtyp, nfile);
+			sprintf(nom_trayec, "%suflowpath%i_%i.csv", dirfinout, flowtyp, nfile);
 			sprintf(nom_outviakl, "%suflowpath%i_%i.kml", dirfinout, flowtyp, nfile);
 			chksing1 = write_pathcsv();
 			chksing2 = write_outkmll();
@@ -2344,13 +2694,38 @@ double ll, tx, ty, tz;
 			{
 				errkml[nfile] = 1;
 				chksum++;
-			}
+			} 
+			resarray(5);                                                /*!< Reset struct cauce rio */
 		}
-		printf("Maximun distance reached %.2lf\n", ll);
+		mxdisflw = ll;
+		tocelflw = totalpt;
+		areaflow = totalpt * resx * resy;
+		totskflw = o;
+		printf("Maximum distance reached %.2lf\n", ll);
 		printf("Total points/cells per flow path calculated %i\n", totalpt);
 		printf("Total sinks per flow path found %i\n", o);
 	}
+	
+	endepoch = clock();
+	difepoch =  endepoch/1000000 -  iniepoch/1000000;        /*!< Calc computing time */
+	printf("Computing time %ld sec\n", difepoch);
 
+	if(forcevar == 0 && mod == 0)
+	{
+		resarray(0);                           /*!< Reset Control rast2 */
+	}	
+	if(forcevar == 0 && mod == 1)
+	{
+		call_writeraster();                    /*!< Write raster 1 and 3*/
+		resarray(1);                           /*!< Reset all raster */
+	}	
+	//if(forcevar == 1 && mod == 0)              /*!< Nothing to do */	
+	if(forcevar == 1 && mod == 1)
+	{
+		call_writeraster();                    /*!< Write raster 1 and 3 */
+		resarray(2);                           /*!< Reset raster 1 and 3 */
+	}
+	write_flowres();
 }
 
 /*! DRUNK SAILER MONTECARLO TYPE FLOW PATH (3) */
@@ -2358,39 +2733,51 @@ void calc_montflow(void)
 {
 int i, j, k, l, m, q, o;
 int cont1;
-int max_pasos, max_max, n_pasos, media, acumula, oks;
+int limext, pasreach, mxdisreach, badcell, nowayout; 
+int n_pasos, limpass, oks, rep;
 double s[8];
-double pr, sum, lmaxdx;
+double pr, sum;
 unsigned char done;
-double ll;
+double ll, inix, iniy;
 	/**
 	* Init var
 	*/
+	iniepoch = clock();                                                 /*!< Get init time */
+	if(nfile == 0) firsepoch = clock();
     for(i=0;i<8;i++)s[i]= 0;                           
-    o         = 0;                                                      /*!< Count total number of sinks in flow path */
-    m         = 0;                                                      /*!< Count total number of cells in flow path */
-    max_max   = 1000000;                                                /*!< Total number of cells allowed per flow path */
-    lmaxdx    = lmax/resx;                                              /*!< Change Dist. Max. in number of cells */
-    max_pasos = max_max;                                                /*!< Control number of cells selected in each flow path */
-    oks       = 1;
-    acumula   = max_pasos/10;
-    cont1     = 0;                                                      /*!< Count total number of iterations */
-    media     = 0;
+    o          = 0;                                                     /*!< Count total number of sinks in flow path */
+    m          = 0;                                                     /*!< Count total number of cells in flow path */
+    oks        = 1;
+    rep        = 0;                                                     /*!< Control noway-out */
+    cont1      = 0;                                                     /*!< Count total number of iterations */
+    nowayout   = 0;                                                     /*!< Count cells selected high numbers of times consecutively */
+    badcell    = 0;														/*!< Count cells with null value or 0 in altitude */
+    pasreach   = 0;														/*!< Count number of times where the total number of steps by flow simulation is reached */
+    mxdisreach = 0;														/*!< Count number of times where the maximum distance is reached */
+    limext     = 0;														/*!< Count number of times where the raster's limits are reached */
+    limpass    = (lmax / resx) * nitera;                                /*!< Total cells permitted per flow path calculation */
     srand(time(NULL));
     /**
-	* First Loop - Control iterations
+	* First Loop - Control iterations and init zpoint
 	*/
     do
     {
-        n_pasos= max_pasos;                                             /*!< n_pasos set to tenth of available steps */
-        done= 0;                                                        /*!< Control the loop - reset to 0 */
+        n_pasos = 0;                                                    /*!< Count cells selected per path */
+        rep     = 0;
+        done    = 0;                                                    /*!< Control the loop - reset to 0 */
         /**
-		* Change original xy using a random fuction
+		* Change original xy using a random function
 		*/
-        k = (int)(1000.0*(float)rand()/(float)RAND_MAX); 
+        k = (int)(500.0*(float)rand()/(float)RAND_MAX); 
 	    i= nxc + gauss[k]; 
-        k = (int)(1000.0*(float)rand()/(float)RAND_MAX);
-	    j= nyc + gauss[k]; 
+        k = (int)(500.0*(float)rand()/(float)RAND_MAX);
+	    j= nyc + gauss[k];
+	    /**
+		* Get coordinates of original xy
+		*/ 
+	    get_coor(i, j);
+	    inix = globx;
+	    iniy = globy;
 	    /**
 		* Second Loop - Get the flow path in each iteration
 		*/
@@ -2401,19 +2788,46 @@ double ll;
             for(l=0;l<8;l++)
             {
                 if(h[l]>0)sum += h[l];                                  /*!< Sum all z-diff higher than 0 */
-                s[l]=sum;                                               /*!< store sum var in s[] array for each element */
+                s[l]=sum;                               /*!< store sum var in s[] array for each element */                                             
             }
             /**
 			* Check loop conditions - sink - z value - sum
 			*/
-            if(s[7]==0)o++;                                             /*!< if s[7] is 0 is a sink */
-            if(topoless[i][j] == 0 || s[7]==0 || s[7]==hl || !sum)done = 1;  /*!< if z == 0 if sink s[7]=0 or s[7]=hl and sum=0 then done=1 out loop 2 */
-            else
+			if(topoless[i][j] == 0 || topoless[i][j] == nullval)
+            {
+				badcell++;
+				done = 1;  /*!< if z == 0 if sink s[7]=0 or s[7]=hl and sum=0 then done=1 out loop 2 */
+			}
+            if(sum==0)                                                 /*!< if s[7] is 0 is a sink */
+            {
+				o++;
+				if(incre > 0)											/*!< if fill increase is higher than 0 */
+				{
+					hl2 = 0;
+					do
+					{
+						hl2 += incre;                                   /*!< increase the z+critical height value using Filling Increase function */
+						calc_levelfill(i, j);
+						if(sum1 == -1)
+						{
+							done = 2;
+							break;
+						}
+						for(l=0;l<8;l++)
+						{
+							if(h[l]>0)sum += h[l];                      /*!< Sum all z-diff higher than 0 */
+							s[l]=sum;                                   /*!< store sum var in s[] array for each element */
+						}
+					}while(sum==0); 	
+				}
+				else done = 2;
+			}		
+			if(done==0)
             {
     		    /**
 				* select the new cell
 				*/
-    		    pr = s[7]*((double)(rand()%1000)/1001.0);               /*!< val from 0 tu sum max */
+    		    pr = s[7]*((double)(rand()%1000)/1001.0);               /*!< val from 0 to sum max */
                 q = 7;                                                  /*!< starting value for q var */
                 if(pr<s[6])q=6;                                         /*!< if pr random var is less than s[x] */
                 if(pr<s[5])q=5;
@@ -2460,16 +2874,61 @@ double ll;
 				* Check loop conditions to see if new cell is inside array
 				* borders are not considered
 				*/
-                if((i<2 || i>colx-3) || (j<2 || j>rowy-3))done = 3;     /*!< if outside then done= 3 out loop 2 */
+                if((i<2 || i>colx-3) || (j<2 || j>rowy-3))
+                {
+					limext++;
+					done = 3;     /*!< if outside then done= 3 out loop 2 */
+				}	
                 else
                 {
-					if(rast2[i][j]==0)m++; 								/*!< if new cell then m++, count a new cell */
-					rast2[i][j] ++;                                      /*!< if not, then sum 1 to the cell */
-					if(rast2[i][j]>nitera)rast2[i][j] = nitera;          /*!< To normalize, we considered the iteration as the max. possible passes */
-					n_pasos--;                                          /*!< Decrease one step */
-					ll = sqrt((i-nxc)*(i-nxc)+(j-nyc)*(j-nyc));         /*!< Calc distance from init */
-					if(!n_pasos) done = 2;                              /*!< if n_pasos is cero then done=2 - exit second loop */
-					if(ll>lmaxdx)done = 3;                              /*!< if dist is higher than Max. Distance then done=3 - exit second loop */
+					/*!< Count new cells in m, */
+					if(forcevar == 0 && incre  > 0) 
+					{
+						if(rast2[i][j]==0)m++;
+					}	
+					else
+					{
+						if (cont1 == 0)
+						{
+							if(rast2[i][j]==0)m++;
+						}	
+						if (cont1 > 0)
+						{
+							if(rast1[i][j]==0)m++;
+						}
+					}										
+					rast1[i][j] ++;										/*!< sum 1 to the cell */
+					rast2[i][j] = 1;                                    /*!< Control raster */
+					rast3[i][j] ++;                                     /*!< sum 1 to the cell */
+					if(maximun < rast1[i][j])maximun = rast1[i][j];     /*!< Get the maximum value */
+					inxdir[n_pasos] = i;                                /*!< Save array index from selected cells */
+					inydir[n_pasos] = j;
+					/**
+					* Check other loop conditions 
+					*/
+					get_coor(i, j);
+					ll = sqrt((globx-inix)*(globx-inix)+(globy-iniy)*(globy-iniy));         /*!< Calc distance from init */
+					if(ll>lmax)                                         /*!< Check if distance is higher than permitted */
+					{
+						mxdisreach++;
+						done = 5;                                       /*!< if yes then done=5 - exit second loop */
+					}	
+					if(n_pasos > limpass)	                            /*!< Check if number of cells is higher than permitted */
+					{
+						pasreach++;
+						done = 6;                                       /*!< if yes then done=6 - exit second loop */
+					}
+					if(n_pasos > 2) 
+					{
+						if(inxdir[n_pasos-2] == i && inydir[n_pasos-2] == j) rep++;   /*!< Check if cell has been selected recently */
+						
+						if(rep > 1000)                                  /*!< if cell has been selected recently more than 1000 times */
+						{
+							nowayout++;
+							done = 4;                                   /*!< if yes then done=4 - exit second loop */
+						}	
+					}	
+					n_pasos++;	                                        /*!< Count selected cells */
 				}	
             }
         }
@@ -2477,42 +2936,71 @@ double ll;
 	    /**
 		* check if remain in the first Loop
 		*/
-        if(done == 2)                                                   /*!< if done=2 */
+        if(done == 3 || done == 4 || done == 5) done=0;
+        if(done == 6)
         {
-            if(media)max_pasos = 2*media;
-            if(max_pasos > 100 || nitera < 250)done = 0; 				/*!< if the distance o number of interations are short or low change donde value*/
-            else done = 2;
-        }
-        if(done == 1 || done == 3)                                      /*!< if done=1-3 */
+			limpass = limpass / 2;                                      /*!< Reduce the number of allowed steps */
+			done=0;	
+		}	
+        if(done == 1 || done == 2)                                      /*!< if done=1-4 */ 
         {
-            acumula += max_pasos - n_pasos;
-            oks++;
-            media = acumula/oks;
-            max_pasos=max_max;
-            done=0;
-        }
-        cont1++;                                                         /*!< Count iterations */
-
+            if(ok < 100)done=0;
+            oks++;   
+        }	
+        cont1++;                                                        /*!< Count iterations */
     }while(!done && cont1 < nitera);                                    /*!< While done = 0 and cont1 lower than total iterations then keep loop 1 */
 
+	
     iterafin = cont1;
-    totalpt = m;
-    printf("Total cells secleted per flow path %i\n", totalpt);
-	printf("Total sinks found %i\n", o);
+    tocelflw = m;
+    totskflw = o;
+    glpasreach = pasreach; 
+    gllimext = limext; 
+    glmxdisreach = mxdisreach; 
+    glbadcell = badcell; 
+    glnowayout = nowayout;
+	/**
+	* Write and Reset raster
+	*/                                         
+	resarray(4);                               /*!< Reset noway-out arrays */
+	if(forcevar == 0 && mod == 0)
+	{
+		resarray(3);                           /*!< Reset Control rast2 */ 
+	}	
+	if(forcevar == 0 && mod == 1)
+	{
+		call_writeraster();                    /*!< Write raster 1 and 3*/
+		resarray(1);                           /*!< Reset all raster */
+	}	
+	//if(forcevar == 1 && mod == 0)              /*!< Nothing to do */	
+	if(forcevar == 1 && mod == 1)
+	{
+		call_writeraster();                    /*!< Write raster 1 and 3 */
+		resarray(2);                           /*!< Reset raster 1 and 3 */
+	}
+	write_flowres();
+	endepoch = clock();
+	difepoch =  endepoch/1000000 -  iniepoch/1000000;                   /*!< Calc computing time */
+	printf("Why exit: intera %i pasosalc %i outrast %i maxdist %i badcell %i noway %i\n", iterafin, pasreach, limext, mxdisreach, badcell, nowayout);
+    printf("Total cells selected per flow path %i\n", tocelflw);
+	printf("Total sinks found %i\n", totskflw);
+	printf("Computing time %ld sec\n", difepoch);
     //-----
 }
 
 /*! MULTITRAYECTORY FLOW PATH (4) */
 void calc_mulflow(void)
 {
-int i, j, k, l, cont, cont2, getval;	
+int i, j, k, l, cont, cont2, getval, sk;	
 float sumh,value; 
 double ll;	
 	
+	iniepoch = clock();                                                 /*!< Get init time */
+	if(nfile == 0) firsepoch = clock();
 	cont    = 0;                                                        /*!< Count total number of selected cell per flow path */
 	cont2   = 0;
 	puntero = 0;
-	size    = 9000;                                                     /*!< var: define FIFO size */ 
+	sk      = 0;														/*!< Count sinks */ 
 	fifoini();                                                          /*!< Init FIFO */
 	/**
 	* Get init array index and z value
@@ -2523,9 +3011,9 @@ double ll;
 	j= nyc;     
 	/**
 	* Set init z point to 1
-	*/
-	rast2[i][j]  = 1;                                                   /*!< Store value */    
-	rast1[i][j] = 1;                                                    /*!< Control array */ 
+	*/                                                                  
+	rast1[i][j] = 1;                                                    /*!< Store value */   
+	rast3[i][j] = 1;                                                    /*!< Store value */
 	fifocarga();                                                        /*!< Sent first data to the FIFO */
 	cont++;
 	/**
@@ -2537,97 +3025,126 @@ double ll;
 		i = FIFO[0][0];                                                 /*!< Get from FIFO col value */
 		j = FIFO[0][1];                                                 /*!< Get from FIFO row value */
 		if(i == -1 && j == -1)break;                                    /*!< if FIFO is empty */
-		getval = rast2[i][j];                                           /*!< Get rast2 val */
-		getmovingcell(i, j, 1);                                         /*!< Get 3x3 moving cell z values */
-		/**
-		* Sum z-diff higher than 0 
-		*/
-		sumh = 0.0;                                                 /*!< Sum z-diff values higher than 0 */
-		l    = 0;                                                   /*!< Count cells with z-diff values higher than 0 */
-		for(k=0;k<8;k++)
+		getval = rast3[i][j];                                           /*!< Get rast2 value */
+		if (topoless[i][j] != nullval)									/*!< If z val is not null */
 		{
-			if(h[k] > 0) 
-			{
-				sumh += h[k]; 
-				l++;
-			}	
-		}
-		if (l > 0)                                                  /*!< if there are z-diff values higher than 0 */
-		{
+			getmovingcell(i, j, 0);                                         /*!< Get 3x3 moving cell z values */
+			/**
+			* Sum z-diff higher than 0 
+			*/
+			sumh = 0.0;                                                 /*!< Sum z-diff values higher than 0 */
+			l    = 0;                                                   /*!< Count cells with z-diff values higher than 0 */
 			for(k=0;k<8;k++)
 			{
-				if (h[k] > 0)                                       /*!< if z-diff is higher than 0 */
+				if(h[k] > 0) 
 				{
-					if (k == 0)                                     /*!< if z-diff in cero is higher than 0 */
+					sumh += h[k]; 
+					l++;
+				} 	
+			}
+			if (l > 0)                                                  /*!< if there are z-diff values higher than 0 */
+			{
+				for(k=0;k<8;k++)
+				{
+					if (h[k] > 0)                                       /*!< if z-diff is higher than 0 */
 					{
-						fcolm = i--;                                /*!< Change column index */
-						frowm = j;                                  /*!< Change column index */
-					}
-					if (k == 1)
-					{
-						fcolm = i++;                                
-						frowm = j;                                  
-					}
-					if (k == 2)
-					{
-						fcolm = i;                                  
-						frowm = j++;                                
-					}
-					if (k == 3)
-					{
-						fcolm = i;                                  
-						frowm = j--;                                
-					}
-					if (k == 4)
-					{
-						fcolm = i++;                                
-						frowm = j++;                                
-					}
-					if (k == 5)
-					{
-						fcolm = i--;                                
-						frowm = j++;                                
-					}
-					if (k == 6)
-					{
-						fcolm = i--;                                
-						frowm = j--;                                
-					}
-					if (k == 7)
-					{
-						fcolm = i++;                                
-						frowm = j--;                                
-					}
-					/**
-					* Check if cell is inside array
-					*/
-					if((i < 2 || i >= colx-2) || (j < 2 || j >= rowy-2))break; 		/*!< if not then stop loop*/
-					else
-					{
-						value = (h[k] * 100) / sumh;	                /*!< Calc percentage of total sumh */
-						if( rast1[fcolm][frowm] == 0 )                  /*!< if it is a new cell in the flow path */    
+						if (k == 0)                                     /*!< if z-diff in cero is higher than 0 */
 						{
-							if(value > distran)                         /*!< if percentage is higher than Restric. Multiflow var then ... */       
-							{
-								rast2[fcolm][frowm] = getval+value;     /*!< Set new value in rast2 */   
-								rast1[fcolm][frowm] = 1;                /*!< Set as selected cell in rast1 */  
-								if(maximun <  rast2[fcolm][frowm])maximun = rast2[fcolm][frowm];        /*!< Get the maximum value */  
-								fifocarga();                            /*!< Load array index in FIFO */    
-								cont++;	                                /*!< Count selected cell */    
-							}	
+							fcolm = i--;                                /*!< Change column index */
+							frowm = j;                                  /*!< Change column index */
 						}
-						ll = sqrt((fcolm-nxc)*(fcolm-nxc)+(frowm-nyc)*(frowm-nyc));                     /*!< Calc distance from init */
-						if(ll>lmax)break;                               /*!< Check if the distance is higher than Max. Dist. */	
-					}	
-				}
-			}		
-			fifodesplaza();	                                            /*!< subtract cell from FIFO */
+						if (k == 1)
+						{
+							fcolm = i++;                                
+							frowm = j;                                  
+						}
+						if (k == 2)
+						{
+							fcolm = i;                                  
+							frowm = j++;                                
+						}
+						if (k == 3)
+						{
+							fcolm = i;                                  
+							frowm = j--;                                
+						}
+						if (k == 4)
+						{
+							fcolm = i++;                                
+							frowm = j++;                                
+						}
+						if (k == 5)
+						{
+							fcolm = i--;                                
+							frowm = j++;                                
+						}
+						if (k == 6)
+						{
+							fcolm = i--;                                
+							frowm = j--;                                
+						}
+						if (k == 7)
+						{
+							fcolm = i++;                                
+							frowm = j--;                                
+						}
+						/**
+						* Check if cell is inside array
+						*/
+						if((i < 2 || i >= colx-2) || (j < 2 || j >= rowy-2))break; 		/*!< if not then stop loop*/
+						else
+						{
+							value = (h[k] * 100) / sumh;	                /*!< Calc percentage of total sum */
+							if( rast1[fcolm][frowm] == 0 )                  /*!< if it is a new cell in the flow path */    
+							{
+								if(value > distran)                         /*!< if percentage is higher than Restric. Multiflow var then ... */       
+								{  
+									rast1[fcolm][frowm] = 1;                /*!< Set new value in rast1 */ 
+									rast3[fcolm][frowm] = getval+1;         /*!< Set new value in rast3 */ 
+									if(maximun < rast3[fcolm][frowm])maximun = rast3[fcolm][frowm];        /*!< Get the maximum value */  
+									fifocarga();                            /*!< Load array index in FIFO */ 
+									cont++;	                                /*!< Count selected cell */                                                                
+								}	
+							}
+							get_coor(fcolm, frowm);						/*!< Get coordinates */  
+							ll = sqrt((globx-xc)*(globx-xc)+(globy-yc)*(globy-yc));             /*!< Calc distance from init */ 
+							if(ll>lmax)break;                               /*!< Check if the distance is higher than Max. Dist. */	
+						}	
+					}  
+				}	
+				fifodesplaza();	                                        /*!< subtract cell from FIFO */
+			}
+			if (l == 0)
+			{
+				sk++;
+				fifodesplaza();                                         /*!< if not, subtract cell from FIFO */                    		
+			}	
 		}
-		if (l == 0)fifodesplaza();                                      /*!< if not, subtract cell from FIFO */
-	
+		if (topoless[i][j] == nullval)  fifodesplaza();	   	            /*!< subtract cell from FIFO */
 	}while(puntero > 1 || i != -1 || j != -1);		                    /*!< While FIFO has cells */
-	printf("Maximun distance reached %.2lf\n", ll);
-	printf("Total points/cells selected %i\n\n", cont);
+	
+	tocelflw = cont;
+    totskflw = sk;
+	/**
+	* Write and Reset raster
+	*/
+	//if(forcevar == 0 && mod == 0)            /*!< Nothing to do */
+	if(forcevar == 0 && mod == 1)              	
+	{
+		call_writeraster();                    /*!< Write raster 1 and 3*/
+		resarray(2);                           /*!< Reset all raster */
+	}	
+	//if(forcevar == 1 && mod == 0)            /*!< Nothing to do */	
+	//if(forcevar == 1 && mod == 1)            /*!< Nothing to do */
+
+	write_flowres();													/*!< Write resume flow path file */
+	endepoch = clock();
+	difepoch =  endepoch/1000000 -  iniepoch/1000000;                   /*!< Calc computing time */
+	printf("Computing time %ld sec\n", difepoch);
+	printf("Maximun distance reached %.2lf m\n", ll);
+	printf("Total points/cells selected %i\n\n", tocelflw);
+	printf("Total sinks found %i\n", totskflw);
+
 
 }
 
@@ -2704,7 +3221,7 @@ FILE *out;
 }
 
 /*! WRITE FROM S-ASPECT/GRAD DEGREE AND SINGLE SUM FLOW PATH LHM AND SSM */
-int write_rast1(int typ)
+int write_rast1(int typ, int mod)
 {
 char   buffer[255];
 short int buff_int[4];
@@ -2715,13 +3232,31 @@ FILE *out;
 	/**
 	* Assign filenames
 	*/ 
-    //------------------------------------------------------------------
-    if(typ == 2)sprintf(nom_rast1, "%sS-aspect_degree_%i.grd", dir_out, metasp);	
-    if(typ == 3)sprintf(nom_rast1, "%sS-gradie_degree_%i.grd", dir_out, metslop);
-    //------------------------------------------------------------------
-    if(typ == 10)sprintf(nom_rast1, "%sFlowpaht_LHM_sum_%i.grd", dir_out, flowtyp);
-	if(typ == 11)sprintf(nom_rast1, "%sFlowpaht_SSM_sum_%i.grd", dir_out, flowtyp);
-	//------------------------------------------------------------------	
+	if(mod < 2)
+	{
+		//--------------------------------------------------------------MORPHOMETRIC 
+		if(typ == 2)sprintf(nom_rast1, "%sS-aspect_degree_%i.grd", dir_out, metasp);	
+		if(typ == 3)sprintf(nom_rast1, "%sS-gradie_degree_%i.grd", dir_out, metslop);
+	}	
+	if(mod == 0)
+	{	
+		//------------------------------------------------------------------
+		if(typ == 10)sprintf(nom_rast1, "%sFlowpaht_LHM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 11)sprintf(nom_rast1, "%sFlowpaht_SSM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 12)sprintf(nom_rast1, "%sFlowpaht_MTramdom_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 13)sprintf(nom_rast1, "%sFlowpaht_Multiflow_%.1f_%.1f.grd", dir_out, hl, distran);
+		//------------------------------------------------------------------
+	}
+	if(mod == 1)
+	{
+		//------------------------------------------------------------------
+		if(typ == 10)sprintf(nom_rast1, "%sFlowpaht_LHM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 11)sprintf(nom_rast1, "%sFlowpaht_SSM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 12)sprintf(nom_rast1, "%sFlowpaht_MTramdom_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 13)sprintf(nom_rast1, "%sFlowpaht_Multiflow_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
+
+		//------------------------------------------------------------------
+	}		
 	printf("Write output raster1 %s\n", nom_rast1);  
 	/**
 	* Get raster head data
@@ -2766,19 +3301,12 @@ FILE *out;
         for(i=0;i<colx;i++)buff_float[i] = (float)rast1[i][j];          /*!< Store row in buffer */
 	    fwrite(buff_float, sizeof(float)*colx, 1, out);                 /*!< Write buffer in output file */
 	}
-    fclose(out);
-    /**
-	* Reset to 0 rast1
-	*/
-	for(j=0;j<rowy;j++)
-	{
-		for(i=0;i<colx;i++)rast1[i][j] = 0; 
-	}	
+    fclose(out);	
 	return 0;
 }
 
 /*! WRITE FROM S-ASPECT/GRAD CLASS, SINGLE FLOW PATH LHM AND SSM, MONTECARLO AND MULTIFLOW */
-int write_rast2(int typ)
+int write_rast2(int typ, int mod)
 {
 char   buffer[255];
 short int buff_int[4];
@@ -2789,14 +3317,12 @@ FILE *out;
     /**
 	* Assign filenames
 	*/ 
-    //-----------------------------------------------------------MORPHOMETRIC  
-    if(typ == 2)sprintf(nom_rast2, "%sS-aspect_clasific_%i.grd", dir_out, metasp);
-    if(typ == 3)sprintf(nom_rast2, "%sS-gradie_clasific_%i.grd", dir_out, metslop);
-	//-----------------------------------------------------------FLOW PATH
-    if(typ == 10)sprintf(nom_rast2, "%sFlowpaht_LHM_%i.grd", dir_out, flowtyp);	
-	if(typ == 11)sprintf(nom_rast2, "%sFlowpaht_SSM_%i.grd", dir_out, flowtyp);	
-    if(typ == 12)sprintf(nom_rast2, "%sFlowpaht_MTramdom_%i.grd", dir_out, flowtyp);
-    if(typ == 13)sprintf(nom_rast2, "%sFlowpaht_Multiflow_%i.grd", dir_out, flowtyp);
+	if(mod < 2)
+	{
+		//-----------------------------------------------------------MORPHOMETRIC  
+		if(typ == 2)sprintf(nom_rast2, "%sS-aspect_clasific_%i.grd", dir_out, metasp);
+		if(typ == 3)sprintf(nom_rast2, "%sS-gradie_clasific_%i.grd", dir_out, metslop);
+	}
     printf("Write rast2 %s\n", nom_rast2); 
     /**
 	* Get raster head data
@@ -2842,18 +3368,11 @@ FILE *out;
 	    fwrite(buff_float, sizeof(float)*colx, 1, out);                 /*!< Write buffer in output file */
 	}
     fclose(out);
-    /**
-	* Reset to 0 rast2
-	*/
-	for(j=0;j<rowy;j++)
-	{
-		for(i=0;i<colx;i++)rast2[i][j] = 0; 
-	} 
 	return 0; 
 }
 
 /*! WRITE FROM S-GRAD PERCENTAGE */
-int write_rast3(int typ)
+int write_rast3(int typ, int mod)
 {
 char   buffer[255];
 short int buff_int[4];
@@ -2861,13 +3380,32 @@ double buff_double[32];
 float  *buff_float;
 int i, j;
 FILE *out;
-    
-    printf("Escrite flow raster\n");  
+     
     /**
 	* Assign filenames
-	*/ 
-    if(typ == 3)sprintf(nom_rast3, "%sS-gradie_porcen_%i.grd", dir_out, metslop);
-    printf("Write rast3 %s\n", nom_rast3);
+	*/
+	if(mod < 2)
+	{
+		//-----------------------------------------------------------MORPHOMETRIC  
+		if(typ == 3)sprintf(nom_rast3, "%sS-gradie_porcen_%i.grd", dir_out, metslop);
+	}
+    if(mod == 0)	
+	{
+		//-----------------------------------------------------------FLOW PATH
+		if(typ == 10)sprintf(nom_rast3, "%sFlowpaht_LHM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);	
+		if(typ == 11)sprintf(nom_rast3, "%sFlowpaht_SSM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 12)sprintf(nom_rast3, "%sFlowpaht_MTramdomLog_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 13)sprintf(nom_rast3, "%sFlowpaht_Multiflow_sum_%.1f_%.1f.grd", dir_out, hl, distran);
+	}
+	if(mod == 1)
+	{
+		//-----------------------------------------------------------FLOW PATH
+		if(typ == 10)sprintf(nom_rast3, "%sFlowpaht_LHM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);	
+		if(typ == 11)sprintf(nom_rast3, "%sFlowpaht_SSM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 12)sprintf(nom_rast3, "%sFlowpaht_MTramdomLog_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 13)sprintf(nom_rast3, "%sFlowpaht_Multiflow_sum_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
+	}
+	printf("Write rast3 %s\n", nom_rast3);		
     /**
 	* Get raster head data
 	*/
@@ -2912,13 +3450,6 @@ FILE *out;
 	    fwrite(buff_float, sizeof(float)*colx, 1, out);                 /*!< Write buffer in output file */
 	}
     fclose(out);
-	/**
-	* Reset to 0 rast3
-	*/
-	for(j=0;j<rowy;j++)
-	{
-		for(i=0;i<colx;i++)rast3[i][j] = 0; 
-	}
 	return 0;
 }
 
@@ -2927,7 +3458,7 @@ FILE *out;
 //***************************************************************************************
 //***************************END OUTPUT RASTER FILES*************************************
 //***************************************************************************************
-//***************************WRITE OUTPUT TXT/KML FILES**********************************
+//***************************WRITE OUTPUT CSV/KML FILES**********************************
 //***************************************************************************************
 //---------------------------------------------------------------------------------------
 
@@ -2955,7 +3486,7 @@ int i;
 	    fprintf(file,"%s\n",
 	         "njear nrios ntramo npt ndist xcoor ycoor zcoor dx	dt quality"); //primera linea
         for(i=0;i<totalpt;i++)
-        {
+        {		
 			fprintf(file,"%i %i %i %i %.2f %lf %lf %lf %.2f %.2f %i\n",
 				
 				caucerio[i].cjerar,
@@ -2996,6 +3527,7 @@ double tx, ty;
 	* Create dynamic buffer to store coordinates
 	*/
 	buffer = (char *)malloc(sizeof(char)*((totalpt*50)+1));
+	strcpy(buffer, "");
 	 /**
 	* Open file 
 	*/
@@ -3057,10 +3589,9 @@ double tx, ty;
 			convert_coor(tx, ty);
 			caucerio[i].clong = longitud;
 			caucerio[i].clat  = latitud;
-					
 			if(i< totalpt-1)sprintf(text, "%.8lf,%.8lf ", longitud, latitud);
 			if(i==totalpt-1)sprintf(text, "%.8lf,%.8lf", longitud, latitud);
-			strcat(buffer, text);					
+			strcat(buffer, text);							
 		}
 		/**
 		* Print end kml file
@@ -3084,11 +3615,157 @@ double tx, ty;
 		fprintf(file,"</Document></kml>\n");
 		/**
 		* Reset to 0 buff
-		*/
+		*/ 
 		strcpy(buffer, "");
 	}
+	fclose(file); 
 	return 0;	
 }					
+
+
+/*! WRITE FLOW PATH RESUME FILE  */
+int write_flowres(void)
+{
+FILE *file;
+char nom_res[256], mode[10], text[256];
+int j, i, difs;
+float difm;
+	/**
+	* Write resume
+	*/
+	if(flowtyp == 1)sprintf(nom_res, "%sFlowpaht_LHH_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 2)sprintf(nom_res, "%sFlowpaht_SSM_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 3)sprintf(nom_res, "%sFlowpaht_MTramdom_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 4)sprintf(nom_res, "%sFlowpaht_Multiflow_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	
+	if(nfile == 0) sprintf(mode, "w");
+	if(nfile  > 0) sprintf(mode, "a+");
+	
+	printf("Resume %i\n", nfile);
+	
+	if((file = fopen(nom_res,mode))== NULL)
+	{
+		printf("-------ERROR open file--------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		return 1;
+	}
+	else
+	{	 
+		if(nfile == 0)
+		{
+			sprintf(text, "Flowpaht Type %i: Parameters CH %.1f FI %.1f FoInt %i WRM %i\n", flowtyp, hl, incre, forcevar, mod);
+			fprintf(file,"%s\n\n", text); //primera linea
+		}
+		
+		if(flowtyp < 3)
+		{
+			if(resflow > 0)
+			{
+				areaflow = tocelflw * resx * resy;
+				fprintf(file,"Flow Path number %i\n", nfile);
+				fprintf(file,"Time computing %ld sec\n", difepoch);
+				fprintf(file,"Maximun distance reached %lf m\n", mxdisflw);
+				fprintf(file,"Total cells per flow path %i\n", tocelflw);
+				fprintf(file,"Total area per flow path %lf m2 and %lf km2\n", areaflow, areaflow/100000);
+				fprintf(file,"Total sinks per flow path %i\n", totskflw);
+				fprintf(file,"-----------------------------------------\n\n");
+			}
+			if(resflow == 0)
+			{
+				fprintf(file,"Flow Path number %i\n", nfile);
+				fprintf(file,"Time computing %ld sec\n", difepoch);	
+				fprintf(file,"Flow Path with no wayout\n");
+				fprintf(file,"-----------------------------------------\n\n");
+			}
+			
+			if(mod == 0 && nfile == ncentros - 1)
+			{
+				for(j=0;j<rowy;j++)
+				{
+					for(i=0;i<colx;i++)
+					{
+						if(rast3[i][j] > 0) acumldis++; 
+					}	
+				}
+				acumarea = acumldis * resx * resy; 
+				difs = endepoch/1000000 - firsepoch/1000000;
+				difm = (float)difs / 60.0;
+				fprintf(file,"Total Time computing %i - %.2f s\n", difs, difm);
+				fprintf(file,"Total cells affected %lf\n", acumldis);
+				fprintf(file,"Total area %lf m2 and %lf km2\n", acumarea, acumarea/100000);
+				fprintf(file,"END REPORT\n");
+			}
+		}
+		if(flowtyp == 3)
+		{
+			areaflow = tocelflw * resx * resy;
+			fprintf(file,"Flow Path number %i\n", nfile);
+			fprintf(file,"Time computing %ld s\n", difepoch);
+			fprintf(file,"Why exit: pasosalc %i outrast %i maxdist %i badcell %i noway %i\n", glpasreach, gllimext, glmxdisreach, glbadcell, glnowayout);
+			fprintf(file,"Total cells per flow path %i\n", tocelflw);
+			fprintf(file,"Total area per flow path %lf m2 and %lf km2\n", areaflow, areaflow/100000);
+			fprintf(file,"Total sinks per flow path %i\n", totskflw);
+			fprintf(file,"-----------------------------------------\n\n");
+			
+			if(mod == 0 && nfile == ncentros - 1)
+			{
+				for(j=0;j<rowy;j++)
+				{
+					for(i=0;i<colx;i++)
+					{
+						if(rast1[i][j] > 0) acumldis++; 
+					}	
+				}
+				acumarea = acumldis * resx * resy; 
+				difs = endepoch/1000000 - firsepoch/1000000;
+				difm = (float)difs / 60.0;
+				fprintf(file,"Total Time computing %i - %.2f s\n", difs, difm);
+				fprintf(file,"Total cells affected %lf\n", acumldis);
+				fprintf(file,"Total area %lf m2 and %lf km2\n", acumarea, acumarea/100000);
+				fprintf(file,"END REPORT\n");
+			}
+			if(mod == 1 && nfile == ncentros - 1)fprintf(file,"END REPORT\n");
+		}
+		if(flowtyp == 4)
+		{
+			areaflow = tocelflw * resx * resy;
+			fprintf(file,"Flow Path number %i\n", nfile);
+			fprintf(file,"Time computing %ld s\n", difepoch);
+			fprintf(file,"Total cells per flow path %i\n", tocelflw);
+			fprintf(file,"Total area per flow path %lf m2 and %lf km2\n", areaflow, areaflow/100000);
+			fprintf(file,"Total sinks per flow path %i\n", totskflw);
+			fprintf(file,"-----------------------------------------\n\n");
+			
+			if(mod == 0 && nfile == ncentros - 1)
+			{
+				for(j=0;j<rowy;j++)
+				{
+					for(i=0;i<colx;i++)
+					{
+						if(rast2[i][j] > 0) acumldis++; 
+					}	
+				}
+				acumarea = acumldis * resx * resy; 
+				difs = endepoch/1000000 - firsepoch/1000000;
+				difm = (float)difs / 60.0;
+				fprintf(file,"Total Time computing %i - %.2f s\n", difs, difm);
+				fprintf(file,"Total cells affected %lf\n", acumldis);
+				fprintf(file,"Total area %lf m2 and %lf km2\n", acumarea, acumarea/100000);
+				fprintf(file,"END REPORT\n");
+			}
+			if(mod == 1 && nfile == ncentros - 1)fprintf(file,"END REPORT\n");
+		}	
+							
+	}
+	fclose(file);
+	 
+	return 0;
+}
+
 
 /*! WRITE TXT RESUME FILE  */
 int write_resum(void)
@@ -3099,7 +3776,7 @@ char text[10], text2[10];
 char  *buff_csv, *buff_kml;
 double superf;
 	i=0;
-	printf("\nEscritura archivo resumen, %s\n", nom_resum);
+	printf("\nWrite Resume File, %s\n", nom_resum);
 	sprintf(nom_resum, "%sResumen.txt", dir_out);
     if((file = fopen(nom_resum,"wt"))== NULL)
     {
@@ -3115,18 +3792,18 @@ double superf;
 		if(demmin > zlo) 
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"LECTURA RASTER MDT\n");
-			fprintf(file,"ATENCION, el valor mínimo para la lectura del MDT es superior al valor de Z min del MDT\n"); 
-			fprintf(file,"Esto puede crear espacios con valores nulos, al no ser tenidos en cuenta en la lectura\n");
+			fprintf(file,"READING DEM\n");
+			fprintf(file,"ATTENTION, the z minimum value to read the DEM is higher than the real minimum Z value\n"); 
+			fprintf(file,"This issue can generate null values in areas with real z data values\n");
 			fprintf(file,"\n**********************************\n");
 			i++;
 		}
 		if (demmax < zhi) 
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"LECTURA RASTER MDT\n");
-			fprintf(file,"ATENCION, el valor máximo para la lectura del MDT es inferior al valor de Z min del MDT\n"); 
-			fprintf(file,"Esto puede crear espacios con valores nulos, al no ser tenidos en cuenta en la lectura\n");
+			fprintf(file,"READING DEM\n");
+			fprintf(file,"ATTENTION, the z maximum value to read the DEM is lower than the real maximum Z value\n"); 
+			fprintf(file,"This issue can generate null values in areas with real z data values\n");
 			fprintf(file,"\n**********************************\n");
 			i++;
 		}
@@ -3138,24 +3815,24 @@ double superf;
 			if(totmask != totmodmask)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"MODIFICA MDT: ESCRITURA ARCHIVO COORDENADAS FASE 2\n");
-				fprintf(file,"ATENCION, los puntos sustituidos en el MDT son menores que los disponibles\n"); 
-				fprintf(file,"Puede haber habido un problema en la lectura del archivo\n");
+				fprintf(file,"DEM Modification: Writing coordinate file in stage 2\n");
+				fprintf(file,"ATTENTION, the total point changed in the DEM are less than the available\n"); 
+				fprintf(file,"It could be a problem during the reading process\n");
 				fprintf(file,"\n**********************************\n");
 				i++;
 			}	
 		}
 		if(modidem == 1)
 		{
-			fprintf(file,"***RESULTADOS DEL PROCESO DE MODIFICACION DEL DTM***\n");
-			fprintf(file,"FASE %i\n", fase);
-			fprintf(file,"Numero de puntos a modificar %i\n",  totmask);
-			if(fase == 2)fprintf(file,"Numero de puntos modificados %i\n",  totmask);
-			fprintf(file,"Superficie final a modificar %.4lf m2\n", supmask);
+			fprintf(file,"***MODIFICATION DEM RESULTS***\n");
+			fprintf(file,"STAGE %i\n", fase);
+			fprintf(file,"Total number of point to be modified %i\n",  totmask);
+			if(fase == 2)fprintf(file,"Total number of point modified %i\n",  totmask);
+			fprintf(file,"Initial surface to be modified %.4lf m2\n", supmask);
 			if(fase == 2)
 			{
-				fprintf(file,"Superficie total modificada %.4lf m2\n", supmask);
-				fprintf(file,"Volumen final modificado %.4lf m3\n", volummask);
+				fprintf(file,"Total surface modified %.4lf m2\n", supmask);
+				fprintf(file,"Total volum modified %.4lf m3\n", volummask);
 			}
 		}
 		/**
@@ -3164,8 +3841,8 @@ double superf;
 		if (chksink2 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"ARREGLA SUMIDERO: ESCRITURA ARCHIVO DE SALIDA RASTER\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, sink detection: writing output raster\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_newdem);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3176,8 +3853,8 @@ double superf;
 		if(chkasp1 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-ASPECT: ESCRITURA ARCHIVO DE CLASES\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, S-ASPECT: writing output raster - CLASES\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_rast2);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3185,8 +3862,8 @@ double superf;
 		if(chkasp2 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-ASPECT: ESCRITURA ARCHIVO EN GRADOS\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, S-ASPECT: writing output raster - DEGREES\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_rast2);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3194,7 +3871,7 @@ double superf;
 		if(metasp > 0)                                                      /*!< if slope-aspect is activated */
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-ASPECT: DISTRIBUCION ORIENTACIONES\n");
+			fprintf(file,"Morphometry, S-ASPECT: Frequency by orientation\n");
 			int* val = (int[10]){1,2,4,8,16,32,64,128,255};                     /*!< array with class values  */ 
 			for(j=0;j<9;j++)
 			{
@@ -3210,8 +3887,8 @@ double superf;
 		if(chkslop1 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-GRADIENT: ESCRITURA ARCHIVO EN GRADOS\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, S-GRADIENT: writing output raster - DEGREES\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_rast1);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3219,8 +3896,8 @@ double superf;
 		if(chkslop2 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-GRADIENT: ESCRITURA ARCHIVO DE CLASES\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, S-GRADIENT: writing output raster - CLASSES\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_rast2);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3228,8 +3905,8 @@ double superf;
 		if(chkslop3 == 1)
 		{
 			fprintf(file,"\n**********************************\n");
-			fprintf(file,"S-GRADIENT: ESCRITURA ARCHIVO EN PROCENTAJES\n");
-			fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+			fprintf(file,"Morphometry, S-GRADIENT: writing output raster - PERCENTAGES\n");
+			fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 			//fprintf(file,"Ruta: %s\n", nom_rast3);
 			fprintf(file,"\n**********************************\n");
 			i++;
@@ -3260,27 +3937,27 @@ double superf;
 			if(k > 0)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"SINGLE FLOW PATH %i: ESCRITURA ARCHIVOS VECTORIALES CSV\n", flowtyp);
-				fprintf(file,"ATENCION, No se escribieron los siguientes archivos csv\n"); 
+				fprintf(file,"SINGLE FLOW PATH %i: Writing CSV files\n", flowtyp);
+				fprintf(file,"ATTENTION, the following files were not written\n"); 
 				fprintf(file,"Numeros: %s\n", buff_csv);
 				fprintf(file,"**********************************\n");
-				fprintf(file,"SINGLE FLOW PATH %i: ESCRITURA ARCHIVOS VECTORIALES KML\n", flowtyp);
-				fprintf(file,"ATENCION, No se escribieron los siguientes archivos csv\n"); 
+				fprintf(file,"SINGLE FLOW PATH %i: Writing KML files\n", flowtyp);
+				fprintf(file,"ATTENTION, the following files were not written\n"); 
 				fprintf(file,"Numeros: %s\n", buff_kml);
 				fprintf(file,"\n**********************************\n");
 			}	
 			if(chksing3 == 1)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"SINGLE FLOW PATH %i: ESCRITURA ARCHIVO RASTER\n", flowtyp);
-				fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+				fprintf(file,"SINGLE FLOW PATH %i: Writing output RASTER\n", flowtyp);
+				fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 				//fprintf(file,"Numeros: %s\n", buff_csv);
 			}	
 			if(chksing4 == 1)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"SINGLE FLOW PATH %i: ESCRITURA ARCHIVO RASTER SUMA\n", flowtyp);
-				fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n");
+				fprintf(file,"SINGLE FLOW PATH %i: Writing output RASTER - SUM\n", flowtyp);
+				fprintf(file,"ATTENTION, an error occurred in the output file\n");
 			}	
 		}
 		if(flowtyp == 3)
@@ -3288,8 +3965,8 @@ double superf;
 			if (chksing3 == 1)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"MONTECARLO FLOW PATH: ESCRITURA ARCHIVO RASTER\n");
-				fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+				fprintf(file,"MONTECARLO FLOW PATH: Writing output RASTER\n");
+				fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 				//fprintf(file,"Numeros: %s\n", buff_csv);
 			}
 		}
@@ -3298,12 +3975,13 @@ double superf;
 			if (chksing3 == 1)
 			{
 				fprintf(file,"\n**********************************\n");
-				fprintf(file,"MULTIFLOW PATH: ESCRITURA ARCHIVO RASTER\n");
-				fprintf(file,"ATENCION, ocurrió un error al generar el archivo de salida\n"); 
+				fprintf(file,"MULTIFLOW PATH: Writing output RASTER\n");
+				fprintf(file,"ATTENTION, an error occurred in the output file\n"); 
 				//fprintf(file,"Numeros: %s\n", buff_csv);
 			}
 		}		
-	}	
+	}
+	fclose(file);	
 	return 1;
 
 }	
@@ -3318,11 +3996,8 @@ double superf;
 /*! MAIN FUNCTION  */
 int main(int argn, char **args)
 {
-//char new[50], comando[256];	
-int k, i, j; 
-//int c, val;
-//DIR* dir;
-double zc, newdat;
+int k, i; 
+double zc;
 
 	sprintf(name_incfg,"%s",args[1]);                                   /*!< Argument config filename */
 	getcwd(cwd, sizeof(cwd));                                           /*!< get working directory */
@@ -3344,12 +4019,11 @@ double zc, newdat;
 		printf("%s\n", wrst(26));
 		exit(0);                                                        /*!< exit program */
 	}	
-	if(modidem == 1)                                                    /*!< if DEM modified is activiated */
+	if(modidem == 1)                                                    /*!< if DEM modified is activated */
 	{
 		printf("*******************************************************************\n");
 		printf("%s\n", wrst(7));
 		printf("*******************************************************************\n");
-		demmask = 0;                                                    /*!< Check if dem mask are equal */
 		if(fase == 1)                                                   /*!< if Step 1 */
 		{
 			printf("%s\n", wrst(8));
@@ -3374,7 +4048,7 @@ double zc, newdat;
 			}
 			chkmod1 = getnpt();                                         /*!< call get - xyzz */
 			/**
-			* Realising memory
+			* Realizing memory
 			*/
 			for(i=0;i<colx;i++)free(mask[i]);
 			free(mask);
@@ -3437,6 +4111,18 @@ double zc, newdat;
 		printf("*******************************************************************\n");
 		printf("%s\n", wrst(15));
 		printf("*******************************************************************\n\n");
+		/**
+		* Optimize array reset operation
+		* Create single temporal array to save arrays index from main rasters
+		* To reduce reset operation time, only reset to 0 those selected cells
+		*/
+		if(flowtyp < 3) sizearray =  (lmax / resx) * 100;
+		if(flowtyp == 3) sizearray =  (lmax / resx) * nitera;           /*!< Max cells per flow path */
+		inxdir = MakeSingleArray(sizearray);
+		inydir = MakeSingleArray(sizearray);
+		
+		printf("Max cells per flow path %i\n", sizearray); 
+		
 		maximun = 0.0;
 		for(k=0;k<ncentros;k++)                                         /*!< total init z points */
 		{  
@@ -3445,6 +4131,7 @@ double zc, newdat;
 			yc   = puntos[k].ptycoor;
 			ok = 0;
 			printf("\n%s %i\n", wrst(16), k);
+			printf("Limits x %.2lf  xmin %.2lf xmax %.2lf, y %.2lf  ymin %.2lf ymax %.2lf\n", xc, xmin, xmax, yc, ymin, ymax);
 			if(xc > xmin && xc < xmax && yc > ymin && yc < ymax)        /*!< if the init z point is inside the working area */
 			{
 				calc_index(xc, yc);
@@ -3456,66 +4143,19 @@ double zc, newdat;
 				*/
 				if( (vcol > 2 && vcol < colx-2) && (vrow > 2 && vrow < rowy-2) ) 
 				{
-					printf("Init Z point %3i de %i    xc= %i yc= %i zc= %i  nxc= %i nyc= %i\n", k, ncentros, (int)xc, (int)yc, (int)zc, nxc, nyc);
+					printf("Init Z point %3i de %i  nxc= %i nyc= %i  zc=%.2lf\n", k, ncentros, nxc, nyc, zc);
+					
 					/**
 					* according to the selected algorithm, the proper function will be called
 					*/				
 					if(flowtyp == 1 || flowtyp == 2)calc_singflow();
 					if(flowtyp == 3) calc_montflow();
 					if(flowtyp == 4) calc_mulflow();
-				}	
+				}			
 			}
 			else printf("%s\n", wrst(17));
 		}
-		/**
-		* Write the ouput raster files according to the flow path algorithm selected
-		*/
-		if(flowtyp == 1)
-		{
-			maxval = maximun;                                           /*!< Assign z max value for raster head data */
-			chksing3 = write_rast1(10);                                 /*!< Write flow path in sum mode */
-			maxval = 1;                                                 /*!< Assign z max value for raster head data */
-			chksing4 = write_rast2(10);                                 /*!< Write flow path */
-			if(chksing3 == 1 || chksing4 == 1)chksum++;
-		}
-		if(flowtyp == 2)
-		{
-			maxval = maximun;                                           /*!< Assign z max value for raster head data */
-			chksing3 = write_rast1(11);                                 /*!< Write flow path in sum mode */
-			maxval = 1;                                                 /*!< Assign z max value for raster head data */
-			chksing4 = write_rast2(11);                                 /*!< Write flow path */
-			if(chksing3 == 1 || chksing4 == 1)chksum++;
-		}
-		if(flowtyp == 3)	
-		{
-			/**
-			* Reading rast2 matrix to normalize the data values
-			*/
-			for(j=0;j<rowy;j++)
-			{
-				for(i=0;i<colx;i++)
-				{
-					if(rast2[i][j]>0)
-					{
-						/**
-						* Normalization process
-						*/
-						newdat = (rast2[i][j]) / (float)nitera;         /*!< normailze to 1 */
-						//newdat = (rast2[i][j] * 100) / (float)nitera;
-						rast2[i][j] = newdat;                           /*!< changing rast2 value */
-					}	
-				}	
-			}
-			maxval = 1;                                                 /*!< Assign z max value for raster head data */
-			chksing3 = write_rast2(12);                                 /*!< Write Montecarlo flow path */
-			if(chksing3 == 1)chksum++;
-		}
-		if(flowtyp == 4)	
-		{
-			maxval = maximun;                                           /*!< Assign z max value for raster head data */
-			chksing3 = write_rast2(13);                                 /*!< Write Multiflow path */
-			if(chksing3 == 1)chksum++;
-		}	
+		if(mod == 0)call_writeraster();	
 	}	
 	/**
 	* Realising memory
@@ -3566,41 +4206,4 @@ double zc, newdat;
 }
 
 
-
-/*
-		 Recorrido por las celdas
-		 ---------------------------------------------------------------------
-		 | i-3 j-3 : i-3 j-2 : i-3 j-1 : i-3 j : i-3 j+1 : i-3 j+2 : i-3 j+3 |
-		 |         *************************************************         |
-		 | i-2 j-3 * i-2 j-2 : i-2 j-1 : i-2 j : i-2 j+1 : i-2 j+2 * i-2 j+3 |
-		 |         *         -----------------------------         *         |
-		 | i-1 j-3 * i-1 j-2 | i-1 j-1 : i-1 j : i-1 j+1 | i-1 j+2 * i-1 j+3 |
-		 |   i j-3 *   i j-2 |  i j-1  :  i j  : i j+1   |   i j+2 *   i j+3 |
-		 | i+1 j-3 * i+1 j-2 | i+1 j-1 : i+1 j : i+1 j+1 | i+1 j+2 * i+1 j+3 |
-		 |         *         -----------------------------         *         |
-		 | i+2 j-3 * i+2 j-2 : i+2 j-1 : i+2 j : i+2 j+1 : i+2 j+2 * i+2 j+3 |
-		 |         *************************************************         |
-		 | i+3 j-3 : i+3 j-2 : i+3 j-1 : i+3 j : i+3 j+1 : i+3 j+2 : i+3 j+3 |
-		 -------------------------------------------------------------------- 
-		
-*/
-
-/*
-Curvature
-//|| a b c  || 9  8  7  ||  i-1 j+1 : i j+1 : i+1 j+1  ||  t5  t2 t4  || Z1 Z2 Z3
-//|| d e f  || 6  5  4  ||  i-1 j   :  i j  : i+1 j    ||  t0  t  t1  || Z4 Z5 Z6
-//|| g h i  || 3  2  1  ||  i-1 j-1 : i j-1 : i+1 j-1  ||  t6  t3 t7  || Z7 Z8 Z9
-Z = Ax²y² + Bx²y + Cxy² + Dx² + Ey² + Fxy + Gx + Hy + I
-
-A = [(Z1 + Z3 + Z7 + Z9) / 4  - (Z2 + Z4 + Z6 + Z8) / 2 + Z5] / res^4
-B = [(Z1 + Z3 - Z7 - Z9) /4 - (Z2 - Z8) /2] / res^3
-C = [(-Z1 + Z3 - Z7 + Z9) /4 + (Z4 - Z6)] /2] / res^3
-D = [(Z4 + Z6) /2 - Z5] / res^2
-E = [(Z2 + Z8) /2 - Z5] / res^2
-F = (-Z1 + Z3 + Z7 - Z9) / 4res^2
-G = (-Z4 + Z6) / 2L
-H = (Z2 - Z8) / 2L
-I = Z5
-* 
-Curvature = -2(D + E) * 100
-*/
+ 
