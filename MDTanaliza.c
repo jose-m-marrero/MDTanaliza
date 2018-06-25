@@ -12,10 +12,11 @@
 #define FALSE 0
 #define PI 3.14159265
 #define CURRENV "1.2"                                                   /*!< version to check config files */
-#define OUTPUTPATH 500                                                  /*!< limit to write txt or kml files in flow models 1 and 2  */
+#define OUTPUTPATH 1100                                                  /*!< limit to write txt or kml files in flow models 1 and 2  */
 #define ZPOINTS 10000                                                   /*!< total init z point allowed */
 #define BEDRIVER 500000                                                 /*!< total bed river point allowed in each flow path */
 #define LAN 1                                                           /*!< Language 1 Spanish 2 English */
+#define REPIT 5000                                                      /*!< Mtramdom, number of time same cell is selected */
 #define SIZE 100000                                                     /*!< FIFO size in multiflow model */
 
 /**
@@ -102,10 +103,11 @@ int maxval, chksing1, chksing2, chksing3, chksing4;
 int errcsv[ZPOINTS], errkml[ZPOINTS];
 int nfile, totalpt, totalfix;
 int nitera, iterafin;
-int fcolm, frowm;
+int fcolm, frowm, precol, prerow;
 int puntero, test, sizearray;
 int resflow, tocelflw, totskflw;
 int glpasreach, gllimext, glmxdisreach, glbadcell, glnowayout;
+int coin[8], roin[8];
 float lmax, hl, hl2, incre, distpt, distran;
 double centros[5000][2], maximun;
 double mxdisflw, areaflow, acumldis, acumarea;
@@ -1411,7 +1413,7 @@ void get_coor(int col, int row)
 
 }
 
-/*! DEPRESSION FILL FUNCTION FOR FLOW PATH MODELS */
+/*! DEPRESSION FILL FUNCTION FOR SINGLE PATH MODELS */
 void calc_levelfill(int col, int row)
 {
 int i, j, l, n, celda;	
@@ -1496,12 +1498,7 @@ double h0, h2[8], alt;
 					celda = l;                                          /*!< Set cell number */
 				}	
 			}
-		}
-		if(flowtyp == 3)
-		{	
-			h[l] = h2[l]; 
 		}	
-		
 	}
 	/**
 	* According to surface type, set sum1 var
@@ -1554,6 +1551,79 @@ double h0, h2[8], alt;
 		*/
 		if(celda <  4) distpt = resx;
 		if(celda >= 4) distpt = resx + (resx / 2);
+}
+
+
+
+/*! DEPRESSION FILL FUNCTION FOR RAMDOM PATH MODEL */
+void calc_levelfill2(int col, int row, int fcr)
+{
+int i, j, l;
+int r1, r2, c1, c2, buq;	
+double h0, h2[8], hm[8], med, summ;
+	
+	buq = 0;
+	for(i=0;i<8;i++)
+	{
+		h2[i]=0;
+		/**
+		*Check last selected cells, if they are the same, end filling depression
+		*/
+		c1 = coin[i];
+		r1 = roin[i];
+		for(j=0;j<8;j++)
+		{   
+			c2 = coin[j];
+			r2 = roin[j];
+			if(i != j)
+			{
+				if(c1 == c2 && r1 == r2) buq++;
+			}
+		}
+	}
+	/**
+	* Calc media value
+	*/
+	summ = 0;
+	hm[0] = topoless[col-1][row]; //c6
+	hm[1] = topoless[col+1][row]; //c4
+	hm[2] = topoless[col][row+1]; //c8
+	hm[3] = topoless[col][row-1]; //c2
+	hm[4] = topoless[col+1][row+1]; //c7
+	hm[5] = topoless[col-1][row+1]; //c9
+	hm[6] = topoless[col-1][row-1]; //c3
+	hm[7] = topoless[col+1][row-1]; //c1
+	for(i=0;i<8;i++) summ += hm[i];
+	med = summ / 8;
+	h0  = med;
+	topoless[col][row] = med;                   /*!< Change z value in DEM  */
+	/**
+	* Calc z diferences value
+	*/
+	h2[0] = h0-topoless[col-1][row]; //c6
+	h2[1] = h0-topoless[col+1][row]; //c4
+	h2[2] = h0-topoless[col][row+1]; //c8
+	h2[3] = h0-topoless[col][row-1]; //c2
+	h2[4] = h0-topoless[col+1][row+1]; //c7
+	h2[5] = h0-topoless[col-1][row+1]; //c9
+	h2[6] = h0-topoless[col-1][row-1]; //c3
+	h2[7] = h0-topoless[col+1][row-1]; //c1
+	
+	//---
+	if (buq < 4)         /*!< if repited cells are less than  */
+	{
+		sum1 = 0;
+		for(l=0;l<8;l++)
+		{
+			if(h2[l]>0)                                                 /*!< if z diff is higher than 0 */
+			{
+				sum1 += h2[l];                                          /*!< Sum all z-diff higher than 0 */	
+			}
+			h[l] = h2[l];	
+		}
+	}
+	if(sum1 < 0) sum1 = -2;         /*!< if still sink */
+	if(buq  > 4) sum1 = -1;	        /*!< if selected cells higher than .. finish filling depression */
 }
 
 /*! DETECT SURFACE DEPRESSION */
@@ -2732,7 +2802,7 @@ double ll, tx, ty, tz;
 void calc_montflow(void)
 {
 int i, j, k, l, m, q, o;
-int cont1;
+int cont1, c, r, cr, cn;
 int limext, pasreach, mxdisreach, badcell, nowayout; 
 int n_pasos, limpass, oks, rep;
 double s[8];
@@ -2744,7 +2814,8 @@ double ll, inix, iniy;
 	*/
 	iniepoch = clock();                                                 /*!< Get init time */
 	if(nfile == 0) firsepoch = clock();
-    for(i=0;i<8;i++)s[i]= 0;                           
+    for(i=0;i<8;i++)s[i]= 0; 
+    cn         = 0;                          
     o          = 0;                                                     /*!< Count total number of sinks in flow path */
     m          = 0;                                                     /*!< Count total number of cells in flow path */
     oks        = 1;
@@ -2803,23 +2874,43 @@ double ll, inix, iniy;
 				o++;
 				if(incre > 0)											/*!< if fill increase is higher than 0 */
 				{
-					hl2 = 0;
-					do
+					if(n_pasos > 1)
 					{
-						hl2 += incre;                                   /*!< increase the z+critical height value using Filling Increase function */
-						calc_levelfill(i, j);
-						if(sum1 == -1)
+						precol = inxdir[n_pasos-2];                     /*!< Save array index from selected cells */
+						prerow = inydir[n_pasos-2];                     /*!< increase the z+critical height value using Filling Increase function */
+						/**
+						* flow direction according last cell
+						*/
+						c = 0;
+						r = 0;
+						if(precol == i-1) c = 1;
+						if(precol == i+1) c = 2;
+						if(precol == i)   c = 3;
+						if(prerow == j-1) r = 10;
+						if(prerow == j+1) r = 20;
+						if(prerow == j)   r = 30;
+						cr = c + r;
+						if(cr > 0 && cr != 33)
 						{
-							done = 2;
-							break;
+							calc_levelfill2(i, j, cr);
+							if(sum1 > 0)
+							{
+								for(l=0;l<8;l++)
+								{
+									if(h[l]>0)sum += h[l];                      /*!< Sum all z-diff higher than 0 */
+									s[l]=sum;                                   /*!< store sum var in s[] array for each element */
+								}
+							}
+							if(sum1 == -1)
+							{
+								done = 2;
+								break;
+							}
 						}
-						for(l=0;l<8;l++)
-						{
-							if(h[l]>0)sum += h[l];                      /*!< Sum all z-diff higher than 0 */
-							s[l]=sum;                                   /*!< store sum var in s[] array for each element */
-						}
-					}while(sum==0); 	
-				}
+						else done = 2;				
+					}
+					else done = 2;
+				}	
 				else done = 2;
 			}		
 			if(done==0)
@@ -2903,6 +2994,10 @@ double ll, inix, iniy;
 					if(maximun < rast1[i][j])maximun = rast1[i][j];     /*!< Get the maximum value */
 					inxdir[n_pasos] = i;                                /*!< Save array index from selected cells */
 					inydir[n_pasos] = j;
+					coin[cn] = i;
+					roin[cn] = j;
+					if(cn == 8) cn = 0;                                 /*!< Save array index of last eight cells -control filling depression */
+					if(cn  < 8) cn++;
 					/**
 					* Check other loop conditions 
 					*/
@@ -2922,8 +3017,8 @@ double ll, inix, iniy;
 					{
 						if(inxdir[n_pasos-2] == i && inydir[n_pasos-2] == j) rep++;   /*!< Check if cell has been selected recently */
 						
-						if(rep > 1000)                                  /*!< if cell has been selected recently more than 1000 times */
-						{
+						if(rep > REPIT)                                  /*!< if cell has been selected recently more than 1000 times */
+						{ 
 							nowayout++;
 							done = 4;                                   /*!< if yes then done=4 - exit second loop */
 						}	
@@ -3241,19 +3336,19 @@ FILE *out;
 	if(mod == 0)
 	{	
 		//------------------------------------------------------------------
-		if(typ == 10)sprintf(nom_rast1, "%sFlowpaht_LHM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
-		if(typ == 11)sprintf(nom_rast1, "%sFlowpaht_SSM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
-		if(typ == 12)sprintf(nom_rast1, "%sFlowpaht_MTramdom_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
-		if(typ == 13)sprintf(nom_rast1, "%sFlowpaht_Multiflow_%.1f_%.1f.grd", dir_out, hl, distran);
+		if(typ == 10)sprintf(nom_rast1, "%sFlowpath_LHM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 11)sprintf(nom_rast1, "%sFlowpath_SSM_sum_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 12)sprintf(nom_rast1, "%sFlowpath_MTramdom_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 13)sprintf(nom_rast1, "%sFlowpath_Multiflow_%.1f_%.1f.grd", dir_out, hl, distran);
 		//------------------------------------------------------------------
 	}
 	if(mod == 1)
 	{
 		//------------------------------------------------------------------
-		if(typ == 10)sprintf(nom_rast1, "%sFlowpaht_LHM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
-		if(typ == 11)sprintf(nom_rast1, "%sFlowpaht_SSM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
-		if(typ == 12)sprintf(nom_rast1, "%sFlowpaht_MTramdom_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
-		if(typ == 13)sprintf(nom_rast1, "%sFlowpaht_Multiflow_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
+		if(typ == 10)sprintf(nom_rast1, "%sFlowpath_LHM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 11)sprintf(nom_rast1, "%sFlowpath_SSM_sum_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 12)sprintf(nom_rast1, "%sFlowpath_MTramdom_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 13)sprintf(nom_rast1, "%sFlowpath_Multiflow_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
 
 		//------------------------------------------------------------------
 	}		
@@ -3392,18 +3487,18 @@ FILE *out;
     if(mod == 0)	
 	{
 		//-----------------------------------------------------------FLOW PATH
-		if(typ == 10)sprintf(nom_rast3, "%sFlowpaht_LHM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);	
-		if(typ == 11)sprintf(nom_rast3, "%sFlowpaht_SSM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
-		if(typ == 12)sprintf(nom_rast3, "%sFlowpaht_MTramdomLog_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
-		if(typ == 13)sprintf(nom_rast3, "%sFlowpaht_Multiflow_sum_%.1f_%.1f.grd", dir_out, hl, distran);
+		if(typ == 10)sprintf(nom_rast3, "%sFlowpath_LHM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);	
+		if(typ == 11)sprintf(nom_rast3, "%sFlowpath_SSM_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 12)sprintf(nom_rast3, "%sFlowpath_MTramdomLog_%.1f_%.1f_%i.grd", dir_out, hl, incre, forcevar);
+		if(typ == 13)sprintf(nom_rast3, "%sFlowpath_Multiflow_sum_%.1f_%.1f.grd", dir_out, hl, distran);
 	}
 	if(mod == 1)
 	{
 		//-----------------------------------------------------------FLOW PATH
-		if(typ == 10)sprintf(nom_rast3, "%sFlowpaht_LHM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);	
-		if(typ == 11)sprintf(nom_rast3, "%sFlowpaht_SSM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
-		if(typ == 12)sprintf(nom_rast3, "%sFlowpaht_MTramdomLog_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
-		if(typ == 13)sprintf(nom_rast3, "%sFlowpaht_Multiflow_sum_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
+		if(typ == 10)sprintf(nom_rast3, "%sFlowpath_LHM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);	
+		if(typ == 11)sprintf(nom_rast3, "%sFlowpath_SSM_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 12)sprintf(nom_rast3, "%sFlowpath_MTramdomLog_%.1f_%.1f_%i_%i.grd", dir_out, hl, incre, forcevar, nfile);
+		if(typ == 13)sprintf(nom_rast3, "%sFlowpath_Multiflow_sum_%.1f_%.1f_%i.grd", dir_out, hl, distran, nfile);
 	}
 	printf("Write rast3 %s\n", nom_rast3);		
     /**
@@ -3633,10 +3728,10 @@ float difm;
 	/**
 	* Write resume
 	*/
-	if(flowtyp == 1)sprintf(nom_res, "%sFlowpaht_LHH_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
-	if(flowtyp == 2)sprintf(nom_res, "%sFlowpaht_SSM_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
-	if(flowtyp == 3)sprintf(nom_res, "%sFlowpaht_MTramdom_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
-	if(flowtyp == 4)sprintf(nom_res, "%sFlowpaht_Multiflow_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 1)sprintf(nom_res, "%sFlowpath_LHH_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 2)sprintf(nom_res, "%sFlowpath_SSM_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 3)sprintf(nom_res, "%sFlowpath_MTramdom_Resum_%.1f_%.1f_%i.txt", dir_out, hl, incre, forcevar);
+	if(flowtyp == 4)sprintf(nom_res, "%sFlowpath_Multiflow_Resum_%.1f_%.1f_%i.txt", dir_out, hl, distran, forcevar);
 	
 	if(nfile == 0) sprintf(mode, "w");
 	if(nfile  > 0) sprintf(mode, "a+");
@@ -3657,7 +3752,7 @@ float difm;
 	{	 
 		if(nfile == 0)
 		{
-			sprintf(text, "Flowpaht Type %i: Parameters CH %.1f FI %.1f FoInt %i WRM %i\n", flowtyp, hl, incre, forcevar, mod);
+			sprintf(text, "Flowpaht Type %i: Parameters CH %.1f R.M. %f FI %.1f FoInt %i WRM %i\n", flowtyp, hl, distran, incre, forcevar, mod);
 			fprintf(file,"%s\n\n", text); //primera linea
 		}
 		
@@ -3746,7 +3841,7 @@ float difm;
 				{
 					for(i=0;i<colx;i++)
 					{
-						if(rast2[i][j] > 0) acumldis++; 
+						if(rast1[i][j] > 0) acumldis++; 
 					}	
 				}
 				acumarea = acumldis * resx * resy; 
