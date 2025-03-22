@@ -11,8 +11,8 @@
 * 
 * Author: Jose M. Marrero 
 *          
-* Version: 0.1.1
-* Creation Date: 2022-01-18
+* Version: 3.0-2025-02-19
+* Creation Date: 2018-04-06
 * Last update: 2025-02-19
 * 
 * Compilation line in repository: gcc MDTanaliza.c -o MDTanaliza -I./lib -lm
