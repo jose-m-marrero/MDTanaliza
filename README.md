@@ -4,25 +4,28 @@ MDTanaliza is an open-source application focused on raster data analysis. It was
 
 The implemented algorithms, internally referred to as analysis strategies, are as follows:
 
-- Modify DEM
-- Calculate Sinks
-- Calculate Aspect (2 methods)
-- Calculate Slope (9 methods)
-- Gravitational Flows (4 methods)
-- Topohazard
-- Multiflow (2 methods)
-- Hazard (not yet implemented)
-- Interpolation (IDW only)
+- 1: Modify DEM
+- 2: Calculate Sinks
+- 3: Calculate Aspect (2 methods)
+- 4: Calculate Slope (9 methods)
+- 5: Gravitational Flows (4 methods)
+- 6: Topohazard
+- 7: Multiflow (2 methods)
+- 8: Hazard (not yet implemented)
+- 9: Interpolation (IDW only)
 
 For the first five strategies, the available reference is:
 Marrero, J.; Vasconez, F.; Espín, P.; Ortiz, R.; Yepes, H.; García, A.; Mothes, P. & Estrella, C. (2019). MDTanaliza: understanding digital elevation models when facing gravity-driven flows in a hazard assessment context. Earth Science Informatics, 27, 317-328. https://doi.org/10.1007/s41324-018-0230-y
 
 For the Topohazard strategy, the reference is:
-Marrero, J.; Vasconez, F.; Espín Beón, P.; Sierra, D.; Yepes, H. & Mothes, P. Topohazard, a novel tool for enhancing gravity-driven flow hazard maps: application to Cotopaxi volcano, Ecuador. Natural Hazards, Submitted.
+Marrero, J.M; Vasconez, F.J.; Espín-Beón, P.; Sierra, D.; Yepes, H.A. & Mothes, P. (2025). Topohazard, a novel tool for enhancing gravity-driven flows hazard maps: application to Cotopaxi volcano, Ecuador. Natural Hazards, https://doi.org/10.1007/s11069-025-07702-5.
 
 To execute MDTanaliza, use the following command:
 bash
 $ ./MDTanaliza /path/configfile.cfg
+To obtain a clean config file
+bash
+$ ./MDTanaliza N (where N is the number of the strategy)
 
 To compile the MDTanaliza.c program, refer to the comments in the MDTanaliza.c source file.
 
@@ -31,12 +34,13 @@ MDTanaliza uses a combination of standard libraries along with some specific lib
 Algorithms and analysis strategies are organized in the include folder. 
 
 # Current Version
-3.0-2025-02-19
+3.0.2-2025-09-20
+Some bugs affecting strategies 5 and 6 in the algorithms have been fixed. Strategy 5 has been improved and optimized. The libraries have also been reviewed.
 
 # Historical versions
 
 *******************************************************
-Version 3.0-2025-02-19
+Version 3.0.0-2025-02-19
 This new version has been completely reprogrammed, separating the analysis algorithms from the main application into individual files to simplify programming and maintenance. Additionally, new analysis strategies have been incorporated.
 
 *******************************************************
