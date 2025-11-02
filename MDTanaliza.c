@@ -11,12 +11,13 @@
 * 
 * Author: Jose M. Marrero 
 *          
-* Version: 3.0-2025-02-19
-* Creation Date: 2018-04-06
-* Last update: 2025-02-19
+* Version: 3.0.2
+* Creation Date: 2022-01-18
+* Last update: 2025-09-20
 * 
+* Compilation line: gcc MDTanaliza.c -o MDTanaliza -I/home/jmarrero/GIS/HAZARD_MODELS/SOFTWARE/c_libraries -lm
 * Compilation line in repository: gcc MDTanaliza.c -o MDTanaliza -I./lib -lm
-* Execution line:  ./MDTanaliza configfile.cfg  or ./MDTanaliza 8 (number to create configfile according to selected strategy)
+* Execution line:  ./MDTanaliza configfile.cfg  or ./MDTanaliza N (number to create configfile according to selected strategy)
 * 
 * Dependencies:
 * General libraries for raster reading and writing (u_arrays.h), 
@@ -434,7 +435,7 @@ float two_thirds, one_thirds;
 						if ((strcmp(token,"MODEDIST")      == 0)) dist_type  = atoi(token2);            /*!< How to calculate maximum runout distance reached by flow path: 1 (in 2dimension) 2 (in 3d) or 3 (by number cells) (flow_mode 1-4) */            
 						//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 
 						//Strategy 6 (Topohazard)
-						if ((strcmp(token,"DIRECTOPO")       == 0)) direc_calc    = atoi(token2);        /*!< Diftop calc direction == 1 horiz - 2 vert - 3 cross */
+						if ((strcmp(token,"DIRECTOPO")       == 0)) direc_calc    = atoi(token2);        /*!< Diftop calc direction == 1 horiz - 2 vert - 3 cross - 4 Nearest */
 						if ((strcmp(token,"FROMCENTER")      == 0)) from_center   = atoi(token2);        /*!< From riverbed */
 						if ((strcmp(token,"FROMLIMASK")      == 0)) from_limask   = atoi(token2);        /*!< From mask limits */
 						if ((strcmp(token,"TOPDISTMAX")      == 0)) topmax_dist   = atof(token2);        /*!< Max. perpendicular distance in meters if > 0, otherwise raster limit */
@@ -696,8 +697,8 @@ void chk_cfgfile(int n_strategy)
 			printf("Attention, no minimum or maximum value in MASK has been set: %lf ;; %lf\n", mas_minval, mas_maxval);
 			exit(0);
 		}
+		printf("No error were found in mask input data\n\n");
 	}
-	printf("No error were found in mask input data\n\n");
 	//******************************************************************
 	//Modify DEM
 	if (n_strategy == 1)
@@ -1416,8 +1417,11 @@ char suffix[50];
 void mod_sinks(const char *file_demn)
 {
 char suffix[50];
+	printf("Calculating sinks\n");
 	/*!< Read original DEM file */
-	rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
+	
 	/*!< Detect and create sink xyz file */
 	strcpy(suffix,"_Sink_pt.xyz");
 	char *file_outsink = get_pathnam(dir_out, namfile, suffix, 1);
@@ -1440,7 +1444,8 @@ char suffix[50];
 void mod_aspect(const char *file_demn, const char *dir_out, const char *namfile)
 {
 	/*!< Read original DEM file */
-	rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
 	/*!< Calc aspect */
 	calc_saspect(dir_out, namfile, rast_dem, s_arrayh, dem_nulval, aspec_mode);
 	/*!< Generate smooth output raster - Optional */
@@ -1467,7 +1472,9 @@ void mod_aspect(const char *file_demn, const char *dir_out, const char *namfile)
 void mod_slope(const char *file_demn, const char *dir_out, const char *namfile)
 {
 	/*!< Read original DEM file */
-	rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
+	
 	/*!< Calc aspect */
 	calc_slope(dir_out, namfile, rast_dem, s_arrayh, dem_nulval, slope_mode);
 	/*!< Generate smooth output raster - Optional */
@@ -1499,7 +1506,7 @@ void mod_gravflows(char *file_xyven, const char *file_demn, const char *dir_out,
 {
 //char suffix[100];
 char *suffix;
-int k, i, j, count_ok;
+int k, i, j, ptid, count_ok;
 int indxc, indyf, max;
 //int *gauss_belt;
 double tx, ty, tz;
@@ -1507,7 +1514,8 @@ double tx, ty, tz;
 	/*!< Read xy vent file to calculate gravitational flows */
 	read_xyz(file_xyven, 2);
 	/*!< Read original DEM file */
-	rast_dem       = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
 	/*!< Create working rasters */
 	raster_path    = Crea_2DFarray(s_arrayh[0].hn_fy, s_arrayh[0].hn_cx);
 	raster_control = Crea_2DIarray(s_arrayh[0].hn_fy, s_arrayh[0].hn_cx);
@@ -1526,11 +1534,13 @@ double tx, ty, tz;
 	{
 		tx   = s_coord[k].ptxcoor;                                   /*!< getting init z points values */
 		ty   = s_coord[k].ptycoor;
+		ptid = s_coord[k].ptid;
 		//printf("Limits x %.2lf  xmin %.2lf xmax %.2lf, y %.2lf  ymin %.2lf ymax %.2lf\n", xc, xmin, xmax, yc, ymin, ymax);
 		if(tx > s_arrayh[0].hxlo && tx < s_arrayh[0].hxhi && ty > s_arrayh[0].hylo && ty < s_arrayh[0].hyhi)        /*!< if the init z point is inside the working area */
 		{
 			indxc = calc_Rindex(tx, s_arrayh[0].hxlo, s_arrayh[0].hresx);
 			indyf = calc_Rindex(ty, s_arrayh[0].hylo, s_arrayh[0].hresy);
+			//printf("x %lf y %lf xlo %lf resx %lf\n", tx, ty, s_arrayh[0].hxlo, s_arrayh[0].hresx);
 			tz = rast_dem[indyf][indxc];
 			if (tz != dem_nulval)
 			{
@@ -1549,7 +1559,7 @@ double tx, ty, tz;
 					{
 						printf("Iniciate Single flow path calculation\n");
 						calc_singflow(k, dir_out, namfile, namxyven, rast_dem, s_arrayh, \
-							dem_nulval, indyf, indxc, tx, ty, tz,\
+							dem_nulval, indyf, indxc, ptid, tx, ty, tz,\
 							flow_mode, max_dist, cri_heig, incre_heig, num_repit, for_inter, dist_type);
 					}
 					/**
@@ -1558,10 +1568,6 @@ double tx, ty, tz;
 					*/
 					if(flow_mode == 3) 
 					{
-						/**
-						* Init random feed
-						*/
-						srand(time(NULL));
 						printf("Iniciate Multiflow Drunk Sailor path calculation\n");
 						calc_drunksailflow(rast_dem, s_arrayh, dem_nulval, \
 							indyf, indxc, tx, ty, tz, max_dist, num_itera, \
@@ -1581,7 +1587,7 @@ double tx, ty, tz;
 			}
 			else printf("ZLP with null z value. Check and coordinates DEM\n");			
 		}
-		else printf("Point outside the DEM\n");
+		else printf("Point outside the DEM: %lf %lf\n", tx,  ty);
 	}
 	/**
 	* If not init xy processed
@@ -1663,7 +1669,9 @@ double max, min, traddx, traddy;
 double min_in,min_out,max_in,max_out;
 	count_ok=0;                     /*!< count processed ZLPs */
 	/*!< Read original DEM file */
-	rast_dem      = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
+
 	num = 1;
 	if (mas_ifused == 1)
 	{
@@ -1690,9 +1698,9 @@ double min_in,min_out,max_in,max_out;
 	/*!< Calc slope of each ZLP */
 	calc_bedslope(s_arrayh, s_zerolevpt, n_zlps);
 	/*!< For each ZLP */
-	for(k=0;k<n_zlts;k++)                                                /*!< for each ZLP calculate tophazard */
+	for(k=0;k<n_zlts;k++)                                                /*!< for each ZLT calculate tophazard */
 	{
-		printf("Creating base raster\n");
+		printf("Creating base raster\n"); 
 		raster_topohaz  = Crea_2DFarray(s_arrayh[0].hn_fy, s_arrayh[0].hn_cx);
 		
 		if (mas_ifused == 1)
@@ -1704,7 +1712,7 @@ double min_in,min_out,max_in,max_out;
 		{
 			for(j=0;j<s_arrayh[0].hn_cx;j++) 
 			{
-				raster_topohaz[i][j] = -9999;
+				raster_topohaz[i][j] = -9999;                 /*!< all values of the working raster will be initiated to -9999 */
 				if (mas_ifused == 1)
 				{
 					inhaz_topo[i][j]  = -9999;
@@ -1712,64 +1720,78 @@ double min_in,min_out,max_in,max_out;
 				}
 			}
 		}
-		printf("Calculating topohazard in ZLP %i\n", k);
+		printf("Calculating topohazard in ZLT %i\n", k);
 		nrio   = s_trajectory[k].rnio;
 		traddx = s_trajectory[k].raddx;
 		traddy = s_trajectory[k].raddy;
-		/*!< For each ZLPs in trajectory */
-		for(i=0;i<n_zlps;i++)
+		/*!< Modes 1, 2 and 3 start calculation from ZLP and corresponding cell
+		 * Mode 4 start calculation from any given cell in raster, and check nearest
+		 * from all available ZLP in a given ZLT */
+		if (direc_calc < 4)
 		{
-			/*!< getting ZLP values */
-			brio  = s_zerolevpt[i].brio;
-			tx    = s_zerolevpt[i].bxcoor;                                   
-			ty    = s_zerolevpt[i].bycoor;
-			tz    = s_zerolevpt[i].bzcoor;
-			idxfy = s_zerolevpt[i].bidxfy;
-			idxcx =	s_zerolevpt[i].bidxcx;
-			//dx    = s_zerolevpt[i].bdx;
-			//printf("z %lf and rio %i - %i\n", tz, nrio, brio);
-			if (tz != dem_nulval && nrio == brio)                               /*!<  if ZLP belongs trajectory */
+			/*!< For each ZLPs in trajectory */
+			for(i=0;i<n_zlps;i++)
 			{
-				if (idxfy > 1 && idxfy < s_arrayh[0].hn_fy-1 && idxcx > 1 && idxcx < s_arrayh[0].hn_cx-2)  /*!<  if in raster */
+				/*!< getting ZLP values */
+				brio  = s_zerolevpt[i].brio;
+				tx    = s_zerolevpt[i].bxcoor;                                   
+				ty    = s_zerolevpt[i].bycoor;
+				tz    = s_zerolevpt[i].bzcoor;
+				idxfy = s_zerolevpt[i].bidxfy;
+				idxcx =	s_zerolevpt[i].bidxcx;
+				//dx    = s_zerolevpt[i].bdx;
+				//printf("z %lf and rio %i - %i\n", tz, nrio, brio);
+				if (tz != dem_nulval && nrio == brio)                               /*!<  if ZLP belongs trajectory */
 				{
-					if(from_center == 1)
+					if (idxfy > 1 && idxfy < s_arrayh[0].hn_fy-1 && idxcx > 1 && idxcx < s_arrayh[0].hn_cx-2)  /*!<  if in raster */
 					{
-						printf("Calculating topohazard in river %i with direction %i and pt riverbed %i in row %i and col %i\n", k, direc_calc, i, idxfy, idxcx);		
-						/*!< Negative search */
-						central_topohazard(rast_dem, s_arrayh, dem_nulval, \
-							idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
-							nrio, traddx, traddy, direc_calc, 1, topmax_dist);
-						/*!< Positive search */
-						central_topohazard(rast_dem, s_arrayh, dem_nulval, \
-							idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
-							nrio, traddx, traddy, direc_calc, 2, topmax_dist);
+						if(from_center == 1)
+						{
+							printf("Calculating topohazard in river %i with direction %i and pt riverbed %i in row %i and col %i\n", k, direc_calc, i, idxfy, idxcx);		
+							/*!< Negative search */
+							central_topohazard(rast_dem, s_arrayh, dem_nulval, \
+								idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
+								nrio, traddx, traddy, direc_calc, 1, topmax_dist);
+							/*!< Positive search */
+							central_topohazard(rast_dem, s_arrayh, dem_nulval, \
+								idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
+								nrio, traddx, traddy, direc_calc, 2, topmax_dist);
+						}
+						
+						if (mas_ifused == 1)
+						{
+							printf("Mask---------\n");
+							printf("Calculating topohazard with mask in %i with direction %i and pt riverbed %i in row %i and col %i\n", k, direc_calc, i, idxfy, idxcx);	
+							/*!< Negative search */
+							mask_topohazard(rast_dem, rast_mask, s_arrayh, dem_nulval, mas_nulval, \
+								idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
+								nrio, traddx, traddy, direc_calc, 1, topmax_dist);
+							/*!< Positive search */
+							mask_topohazard(rast_dem, rast_mask, s_arrayh, dem_nulval, mas_nulval, \
+								idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
+								nrio, traddx, traddy, direc_calc, 2, topmax_dist);
+						}
+						count_ok++;
 					}
-					
-					if (mas_ifused == 1)
-					{
-						printf("Mask---------\n");
-						printf("Calculating topohazard with mask in %i with direction %i and pt riverbed %i in row %i and col %i\n", k, direc_calc, i, idxfy, idxcx);	
-						/*!< Negative search */
-						mask_topohazard(rast_dem, rast_mask, s_arrayh, dem_nulval, mas_nulval, \
-							idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
-							nrio, traddx, traddy, direc_calc, 1, topmax_dist);
-						/*!< Positive search */
-						mask_topohazard(rast_dem, rast_mask, s_arrayh, dem_nulval, mas_nulval, \
-							idxfy, idxcx, tx, ty, tz, s_zerolevpt, n_zlps, \
-							nrio, traddx, traddy, direc_calc, 2, topmax_dist);
-					}
-					count_ok++;
 				}
 			}
+			/**
+			* If not ZLP processed
+			*/
+			if (count_ok == 0)
+			{
+				printf("Attention: No ZLP processed, something went wrong\n");
+				exit(0);
+			}
 		}
-		/**
-		* If not ZLP processed
-		*/
-		if (count_ok == 0)
+		if (direc_calc == 4) 
 		{
-			printf("Attention: No ZLP processed, something went wrong\n");
-			exit(0);
+			getime(); 
+			nearest_topohazard(rast_dem, s_arrayh, dem_nulval, s_zerolevpt, n_zlps, nrio);
+			getime(); 
 		}
+		//**************************************************************
+		//**************************************************************
 		/**
 		* Detect max value
 		*/
@@ -1883,7 +1905,8 @@ float ndist, tdx, distance;
 double tx, ty, tz, max,min, tslopep;
 	
 	/*!< Read original DEM file */
-	rast_dem        = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
 	num = 1;
 	if (mas_ifused == 1)
 	{
@@ -2104,7 +2127,8 @@ char *suffix, *file_outpath;
 	printf("Reading input filesf\n");
 	
 	/*!< Read original DEM file */
-	rast_inter = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	if (dem_cliped != 1) rast_dem = read_grdrasterF(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0);
+	else rast_dem = read_grdrasterF_clip(file_demn, dem_nulval, dem_minval, dem_maxval, s_arrayh, dem_typras, 0, dem_nwxlow, dem_nwxhig, dem_nwylow, dem_nwyhig);
 	/*!< Read original DEM file */
 	read_xyz(file_xyz, 3);
 	
@@ -2251,9 +2275,11 @@ int main(int argn, char **args)
 {
 int call, es_med;
 char home[MAX_PATH];
-
-	es_med=call=0;
+	/**
+	* Init random feed
+	*/
 	srand(time(NULL));
+	es_med=call=0;
 	printf("Initiating MDTanaliza\n");
 	getime(); 
 	printf("Check working directory\n");
@@ -2303,9 +2329,10 @@ char home[MAX_PATH];
 			if (es_med == 1) printf("Alternative working directory in: %s\n", home);
 			//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 			call = read_cfg(args[1], home);
-			printf("Check cfg principal, si valor de retorno es 1: %i\n\n", call);
+			printf("Check main cfg principal, if return value different than 1: %i\n\n", call);
 			if (call == 1)
 			{
+				printf("Initiating calculation in %i\n", n_strategy);
 				//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 				if (n_strategy == 1) mod_dem(file_xyz, file_dem, dir_out, namfile);
 				//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -2350,7 +2377,18 @@ char home[MAX_PATH];
 
 
 
-
+/*!
+ * PENDING
+ * New option in strategy 1 using a mask instead xy file only.
+ * Normalized yes or no in output rasters
+ * 
+ * UPDATES
+ * 2025/09/20: Fixed gravity flow in mode 3. Error in random function implementation and search vents
+ * 2025/09/12: random function (general lib) in gravity flow in mode 3 did not work well.
+ * 2025/08/11: Implementation clip raster option in all strategies, but modify DEM
+ * 2025/08/10: Implementation mode 4 in Topohazards (nearest). Not finish
+ * 	Results are not quite good yet
+ */
 
 
 

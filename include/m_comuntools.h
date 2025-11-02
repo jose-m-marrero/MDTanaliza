@@ -121,7 +121,7 @@ double *topoval, sumcell, topo_cells[8], diff_topo, max_val;
 	cont_notnull = cont_topo = sumcell = 0;
 	diff_topo = -9999;
 	max_val = 0;
-	topoval = busca_celproxF(raster, idx_fy, idx_cx);    /*!< get z valuels  from 8 neighbour cells */
+	topoval = search_celproxF(raster, idx_fy, idx_cx);    /*!< get z valuels  from 8 neighbour cells */
 	
 	for(l=0;l<8;l++)
 	{
@@ -322,10 +322,10 @@ char namefile[55];
 	if (num_strategy == 1 || num_strategy == 3 || num_strategy == 4 || num_strategy == 9)
 	{
 		fprintf(file,"%s\n", "#****---------SMOOTHING-----------------*****");
-		fprintf(file,"%s\n", "SOFTMODE:2");
-		fprintf(file,"%s\n", "SOFTMIN:90");
-		fprintf(file,"%s\n", "SOFTMAX:110");
-		fprintf(file,"%s\n", "SOFTCEL:6");
+		fprintf(file,"%s\n", "SMOOTHMODE:2");
+		fprintf(file,"%s\n", "SMOOTHPMIN:90");
+		fprintf(file,"%s\n", "SMOOTHPMAX:110");
+		fprintf(file,"%s\n", "SMOOTHTCEL:6");
 	}
 	fprintf(file,"%s\n", "#*****OUT********");
 	fprintf(file,"%s\n", "DIR_OUTGEN:/pathwithouthomeuser/");

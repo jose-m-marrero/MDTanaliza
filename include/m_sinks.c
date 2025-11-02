@@ -110,7 +110,7 @@ int k, ci, rj, l, result;
 		if((ci>3 && ci<s_arrayh[0].hn_fy-3 ) && ( rj>3 && rj<s_arrayh[0].hn_cx-3 ))
 		{
 			h0 = raster[ci][rj];
-			cellsval = busca_celproxF(raster, ci, rj);
+			cellsval = search_celproxF(raster, ci, rj);
 			result   = calc_higlow(h0, cellsval);
 		}
 		if (result == 8) l++;
@@ -184,7 +184,7 @@ double c1,c2,c3,c4,c6,c7,c8,c9; //c5 is h0
 					h0  = raster[i][j];                                   /*!< get z coordinate value */
 					if(h0 != dem_nulval)                                   /*!< if z coordinate value is not null */
 					{
-						cellsval = busca_celproxF(raster, i, j);
+						cellsval = search_celproxF(raster, i, j);
 						for (k=0;k<8;k++)
 						{
 							celldif[k] = fabsf(h0 - cellsval[k]);

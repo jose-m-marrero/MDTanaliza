@@ -13,7 +13,7 @@
 * 
 * Version: 0.1.1
 * Creation Date: 2019-11-01
-* Last update: 2022-03-26
+* Last update: 2025-08-11
 * 
 * Description: 
 * 
@@ -463,7 +463,7 @@ static double datos[2];
 double **smooth_rasterF(double **raster, struct HeadR s_arrayh[], int r_indx, float raster_null, int s_modesmooth, float s_maxpercent, float s_minpercent, int s_totoutcels)
 {
 int i, j, k;
-int tot_cells, count_valid, proxcell_outlim, borderlim;
+int tot_cells, cells_mod, count_valid, proxcell_outlim, borderlim;
 double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, percent;	
 	printf("Smoothing raster data in mode %i\n", s_modesmooth);
 	rastersoft = Crea_2DFarray(s_arrayh[r_indx].hn_fy, s_arrayh[r_indx].hn_cx);
@@ -478,7 +478,7 @@ double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, perc
 		borderlim = 4;
 		tot_cells = 24;
 	}
-	
+	cells_mod=0;
 	for(i=0;i<s_arrayh[r_indx].hn_fy;i++) 
 	{
 		for(j=0;j<s_arrayh[r_indx].hn_cx;j++) 
@@ -489,7 +489,7 @@ double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, perc
 				/*! if value not null */
 				if (raster[i][j] != raster_null)
 				{
-					tot_cells = count_valid = proxcell_outlim = sum_cellsval = max_proxcel = 0;
+					count_valid = proxcell_outlim = sum_cellsval = max_proxcel = 0;
 					min_proxcel = 100000000000;
 
 					if (s_modesmooth == 1) prox_cellval = search_celproxF(raster, i, j);   /*! Get 8 cell values */
@@ -498,6 +498,7 @@ double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, perc
 					/*! check values from proximal cells */
 					for(k=0;k<tot_cells;k++) 
 					{
+						//printf("z next %lf\n", prox_cellval[k]);
 						/*! if proximal cell value is not null */
 						if (prox_cellval[k] != raster_null)
 						{
@@ -515,11 +516,14 @@ double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, perc
 							count_valid++;                    /*! Count all non null proximal cell values */
 						}
 					}
+					//printf("z %lf - sum_cellsval %lf - valid %i :: pe %lf - %i\n", raster[i][j], sum_cellsval, count_valid, percent, tot_cells);
+					
 					/*! if proximal cell out of limits is higher than a predefined value  */
 					if (proxcell_outlim > s_totoutcels)
 					{
 						rastersoft[i][j] = sum_cellsval / count_valid;             /*! Average calculation between all non null proximal cells */
 						//rastersoft[i][j] = max_proxcel + min_proxcel / 2;       /*! Average from maximum and minimum - it does not work well */
+						cells_mod++;
 					}
 					else rastersoft[i][j] = raster[i][j];               /*! if condition is not match, value in raster remains */
 				}
@@ -528,6 +532,9 @@ double *prox_cellval, **rastersoft, max_proxcel, min_proxcel, sum_cellsval, perc
 			else rastersoft[i][j] = raster[i][j];
 		}
 	}
+	
+	printf("Total cell modified: %i\n",cells_mod); 
+	
 	return rastersoft;
 }
 
@@ -745,13 +752,18 @@ double xres, yres;
     printf("colx  = %5i -- rowy = %5i\n",         s_arrayh[num_rast].hn_cx, s_arrayh[num_rast].hn_fy);
 	printf("xmin = %f -- xmax = %f\n",            s_arrayh[num_rast].hxlo, s_arrayh[num_rast].hxhi);
 	printf("ymin = %f -- ymax = %f\n",            s_arrayh[num_rast].hylo, s_arrayh[num_rast].hyhi);
-    printf("zlo = %10.4f -- zhi = %10.4f\n",      s_arrayh[num_rast].hzlo, s_arrayh[num_rast].hzhi);
-    printf("Raster x-resolution resx = %f\n",     s_arrayh[num_rast].hresx);
-    printf("Raster y-resolution resy = %f\n",     s_arrayh[num_rast].hresy);
-    printf("Raster inverse resolution invresx = %f and invresy = %f\n", s_arrayh[num_rast].hinvresx, s_arrayh[num_rast].hinvresy);
-    printf("Raster double resolution resx2 = %f and resy2 = %f\n",     s_arrayh[num_rast].hresxx, s_arrayh[num_rast].hresyy);
-    printf("Perimeter %lf\n",  s_arrayh[num_rast].hperim);
-    printf("Area %lf\n",  s_arrayh[num_rast].harea);
+	printf("zlo = %10.4f -- zhi = %10.4f\n",      s_arrayh[num_rast].hzlo, s_arrayh[num_rast].hzhi);
+	printf("Raster x-resolution resx = %f\n",     s_arrayh[num_rast].hresx);
+	printf("Raster y-resolution resy = %f\n",     s_arrayh[num_rast].hresy);
+	printf("Raster inverse resolution invresx = %f and invresy = %f\n", s_arrayh[num_rast].hinvresx, s_arrayh[num_rast].hinvresy);
+	printf("Raster double resolution resx2 = %f and resy2 = %f\n",     s_arrayh[num_rast].hresxx, s_arrayh[num_rast].hresyy);
+	printf("Perimeter %lf\n",  s_arrayh[num_rast].hperim);
+	printf("Area %lf\n",  s_arrayh[num_rast].harea);
+	if (s_arrayh[num_rast].hxlo < 0 ||  s_arrayh[num_rast].hylo < 0)
+	{
+		printf("ATENTION: xlow or ylow corner coordinates are below 0, check raster dimension or geographic proyection\n");
+		exit(0);
+	}
 }
 
 /*! Read and store header Binary *grd data */ 
@@ -787,16 +799,22 @@ double xres, yres;
 	
 	printf(".grd Raster header:\n");
 	printf("raster type: %s\n", raster_typetxt);
-    printf("colx  = %5i -- rowy = %5i\n",         s_arrayh[num_rast].hn_cx, s_arrayh[num_rast].hn_fy);
+	printf("colx  = %5i -- rowy = %5i\n",         s_arrayh[num_rast].hn_cx, s_arrayh[num_rast].hn_fy);
 	printf("xmin = %f -- xmax = %f\n",            s_arrayh[num_rast].hxlo, s_arrayh[num_rast].hxhi);
 	printf("ymin = %f -- ymax = %f\n",            s_arrayh[num_rast].hylo, s_arrayh[num_rast].hyhi);
-    printf("zlo = %10.4f -- zhi = %10.4f\n",      s_arrayh[num_rast].hzlo, s_arrayh[num_rast].hzhi);
-    printf("Raster x-resolution resx = %f\n",       s_arrayh[num_rast].hresx);
-    printf("Raster y-resolution = %f\n",       s_arrayh[num_rast].hresy);
-    printf("Raster inverse resolution invresx = %f and invresy = %f\n", s_arrayh[num_rast].hinvresx, s_arrayh[num_rast].hinvresy);
-    printf("Raster double resolution resx2 = %f and resy2 = %f\n",     s_arrayh[num_rast].hresxx, s_arrayh[num_rast].hresyy);
-    printf("Perimeter %lf\n",  s_arrayh[num_rast].hperim);
-    printf("Area %lf\n",  s_arrayh[num_rast].harea);
+	printf("zlo = %10.4f -- zhi = %10.4f\n",      s_arrayh[num_rast].hzlo, s_arrayh[num_rast].hzhi);
+	printf("Raster x-resolution resx = %f\n",       s_arrayh[num_rast].hresx);
+	printf("Raster y-resolution = %f\n",       s_arrayh[num_rast].hresy);
+	printf("Raster inverse resolution invresx = %f and invresy = %f\n", s_arrayh[num_rast].hinvresx, s_arrayh[num_rast].hinvresy);
+	printf("Raster double resolution resx2 = %f and resy2 = %f\n",     s_arrayh[num_rast].hresxx, s_arrayh[num_rast].hresyy);
+	printf("Perimeter %lf\n",  s_arrayh[num_rast].hperim);
+	printf("Area %lf\n",  s_arrayh[num_rast].harea);
+	
+	if (s_arrayh[num_rast].hxlo < 0 ||  s_arrayh[num_rast].hylo < 0)
+	{
+		printf("ATENTION: xlow or ylow corner coordinates are below 0, check raster dimension or geographic proyection\n");
+		exit(0);
+	}
 }
 
 /*! Read ASCII or Binary integer *grd raster 
@@ -855,6 +873,7 @@ int **raster;
 		resolx  = s_arrayh[num_rast].hresx;
 		resoly  = s_arrayh[num_rast].hresy;
 		printf("datos devueltos %i %i %lf %lf\n", nyfilas, nxcolum, resolx, resoly);
+		printf("Valid data interval: %f - %f, both included\n", grdmin, grdmax);
 		raster = Crea_2DIarray(nyfilas, nxcolum);
 		
 		for(i=0;i<nyfilas;i++) //filas
@@ -914,15 +933,15 @@ double **raster;
 
 	printf("\n***Lectura archivo grd, %s ***\n", name_grd);
 	printf("Tipo raster %i\n", ntype_raster);
-    if((in=fopen(name_grd,"rb"))==NULL)
+	if((in=fopen(name_grd,"rb"))==NULL)
 	{
-	    printf("-------ERROR open file--------\n");
-        printf("-----------ERROR--------------\n");
-        printf("-----------ERROR--------------\n");
-        printf("-----------ERROR--------------\n");
-        printf("-----------ERROR--------------\n");
-        printf("-----------ERROR--------------\n");
-        exit(0);
+		printf("-------ERROR open file--------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		exit(0);
 	}
 	else
 	{
@@ -955,6 +974,7 @@ double **raster;
 		resolx  = s_arrayh[num_rast].hresx;
 		resoly  = s_arrayh[num_rast].hresy;
 		printf("datos devueltos %i %i %lf %lf\n", nyfilas, nxcolum, resolx, resoly);
+		printf("Valid data interval: %f - %f, both included\n", grdmin, grdmax);
 		raster = Crea_2DFarray(nyfilas, nxcolum);
 		
 		for(i=0;i<nyfilas;i++) //filas
@@ -993,8 +1013,158 @@ double **raster;
 		printf("end read DEM file\n");  
 		printf("---------------------------------\n\n");
 	}
-    return raster;
+	return raster;
 }
+
+
+
+
+/*! Read ASCII or Binary double-float *grd raster in clip mode
+ * ntype_raster: Raster type must be defined (1-binary 2-ASCII)
+ * Other inputs parameters: raster name, null value and maximum and minimum valid data
+ * clips requires corner coordinates  */
+double **read_grdrasterF_clip(const char *name_grd, float grdnul, float grdmin, float grdmax, \
+	struct HeadR s_arrayh[], int ntype_raster, int num_rast, \
+	double clip_xlow, double clip_xhig, double clip_ylow, double clip_yhig)
+{
+FILE *in;
+float datofl[4];
+double dato, datfin;
+int i, j, contnul, contgod, i_clip, j_clip;
+//int nyfilas, nxcolum;
+double resolx, resoly;
+//struct HeadR array_headF;
+double **raster;
+int big_ncx, big_nfy;
+double big_xlow, big_xhig, big_ylow, big_yhig;
+int valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max;
+	printf("\n***Lectura archivo grd and CLIP, %s ***\n", name_grd);
+	printf("Tipo raster %i\n", ntype_raster);
+	if((in=fopen(name_grd,"rb"))==NULL)
+	{
+		printf("-------ERROR open file--------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		printf("-----------ERROR--------------\n");
+		exit(0);
+	}
+	else
+	{
+		if (ntype_raster == 1)
+		{
+			read_headerB(s_arrayh, num_rast, in);
+		}
+		if (ntype_raster == 2)
+		{
+			read_headerA(s_arrayh, num_rast, in);
+		}
+		/**
+		* Creating array and calculating new values
+		*/
+		//resolution remain the same
+		resolx  = s_arrayh[num_rast].hresx;
+		resoly  = s_arrayh[num_rast].hresy;
+		printf("Transfering big arraday header \n");
+		big_ncx  = s_arrayh[num_rast].hn_cx;         /*! add number of columns in x */
+		big_nfy  = s_arrayh[num_rast].hn_fy;         /*! add number of rows in y */
+		big_xlow = s_arrayh[num_rast].hxlo;          /*! minimum x-coordinate */
+		big_xhig = s_arrayh[num_rast].hxhi;          /*! maximum x-coordinate */
+		big_ylow = s_arrayh[num_rast].hylo;          /*! minimum y-coordinate */
+		big_yhig = s_arrayh[num_rast].hyhi;          /*! maximum y-coordinate */
+		printf("Calculating new clip header \n");
+		//colums and rows of clip: distance / resolution
+		s_arrayh[num_rast].hn_fy = 1 + (int)((clip_yhig - clip_ylow) / s_arrayh[num_rast].hresy);
+		s_arrayh[num_rast].hn_cx = 1 + (int)((clip_xhig - clip_xlow) / s_arrayh[num_rast].hresx);
+		//nyfilas = s_arrayh[num_rast].hn_fy;
+		//nxcolum = s_arrayh[num_rast].hn_cx;
+		//limits of valid data: distance in columns and rows between big and clip
+		valid_limcx_min = (int)((clip_xlow - big_xlow) / s_arrayh[num_rast].hresx); // 0 + X = new 0
+		valid_limcx_max = big_ncx - ((int)((big_xhig - clip_xhig) / s_arrayh[num_rast].hresx)); //from X to max
+		valid_limfy_min = (int)((clip_ylow - big_ylow) / s_arrayh[num_rast].hresy);
+		valid_limfy_max = big_nfy - ((int)((big_yhig - clip_yhig) / s_arrayh[num_rast].hresy));
+		//adjust columns and rows
+		if (s_arrayh[num_rast].hn_cx < (valid_limcx_max - valid_limcx_min)) s_arrayh[num_rast].hn_cx = valid_limcx_max- valid_limcx_min;
+		if (s_arrayh[num_rast].hn_fy < (valid_limfy_max - valid_limfy_min)) s_arrayh[num_rast].hn_fy = valid_limfy_max- valid_limfy_min;
+		//readjust coordinates to clip dimension based on indexes
+		s_arrayh[num_rast].hxlo = big_xlow + (valid_limcx_min * resolx);
+		s_arrayh[num_rast].hxhi = big_xlow + (valid_limcx_max * resolx);
+		s_arrayh[num_rast].hylo = big_ylow + (valid_limfy_min * resoly);
+		s_arrayh[num_rast].hyhi = big_ylow + (valid_limfy_max * resoly);
+		printf("Creando clip array \n");
+		contnul=0;
+		contgod=0;
+		
+		printf("array dimension and resolution %i %i %lf %lf\n", s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx, resolx, resoly);
+		printf("Valid data interval: %f - %f, both included\n", grdmin, grdmax);
+		printf("Valid cell limits: big %i %i clip %i %i - %i %i  %i %i \n", big_ncx, big_nfy, s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx, \
+			valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max);
+		raster = Crea_2DFarray(s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx);
+		i_clip = 0;
+		for(i=0;i<big_nfy;i++) //rows of big array
+		{
+			j_clip=0;
+			for(j=0;j<big_ncx;j++) //columns of big array
+			{
+				//read each data
+				if (ntype_raster == 1) 
+				{
+					fread(&datofl,sizeof(float),1,in);                      /*!< Lee *.grd en formato binario */
+					datfin = datofl[0];
+				}
+				if (ntype_raster == 2) 
+				{
+					fscanf(in,"%lf", &dato);                                /*!< Lee *.grd en formato ASCII */
+					datfin = dato;
+				}
+				//check if data is in limits
+				if((datfin > grdmax) || (datfin < grdmin))                 /*!< Evalua si el valor esta dentro de los limites definidos */
+				{
+					datfin = grdnul;                                        /*!< Se asigna valor nulo si esta fuera de los limites */
+					contnul+=1;
+				}
+				else  contgod +=1;
+				//when data are saved in clipped array
+				
+				/*! if index i is in in clip area */
+				if ((i > valid_limfy_min && i < valid_limfy_max) && (j > valid_limcx_min && j < valid_limcx_max))
+				{
+					raster[i_clip][j_clip]  = datfin;
+					//printf("dat %lf : big %i %i : clip i %i j %i\n", datfin, i, j, i_clip, j_clip);
+					j_clip++;
+				}
+			}
+			if (i > valid_limfy_min && i < valid_limfy_max)	i_clip++;                              
+		}     
+		fclose(in);
+		printf("datos temp entrada: %f %f %f %i %i cont: %i %i Dim %lf %lf\n", grdnul, grdmin, grdmax, ntype_raster, num_rast, contnul, contgod, resoly, resolx);
+		
+		/**
+		* Print header again
+		*/
+		printf("New .grd Clip Raster header:\n");
+		printf("raster type: %i\n", ntype_raster);
+		printf("colx  = %5i -- rowy = %5i\n",         s_arrayh[num_rast].hn_cx, s_arrayh[num_rast].hn_fy);
+		printf("xmin = %f -- xmax = %f\n",            s_arrayh[num_rast].hxlo, s_arrayh[num_rast].hxhi);
+		printf("ymin = %f -- ymax = %f\n",            s_arrayh[num_rast].hylo, s_arrayh[num_rast].hyhi);
+		printf("zlo = %10.4f -- zhi = %10.4f\n",      s_arrayh[num_rast].hzlo, s_arrayh[num_rast].hzhi);
+		printf("Raster x-resolution resx = %f\n",     s_arrayh[num_rast].hresx);
+		printf("Raster y-resolution resy = %f\n",     s_arrayh[num_rast].hresy);
+		/**
+		* Print results
+		*/
+		printf("---------------------------------\n\n");
+		printf("Tot cells ok leidas %i\n", contgod);
+		printf("Area de trabajo %lf\n", contgod * resolx * resoly);
+		printf("Tot cells nulls in DEM = %i\n", contnul);
+		printf("Area nula %lf\n", contnul * resolx * resoly);
+		printf("end read DEM file\n");  
+		printf("---------------------------------\n\n");
+	}
+	return raster;
+}
+
 
 
 //**********************************************************************
@@ -1075,13 +1245,31 @@ FILE *out;
 				for(j=0;j<ncxfin;j++)
 				{
 					buff_datint[j] = (int)raster[i][j];       /*!< Si es entero, almacena toda la linea en un buffer */	
+					/*
+					//TEST**********************************************
+					if (j <  ncxfin)
+					{	
+						if (buff_datint[j] > 0) printf("%i", buff_datint[j]); //TEST
+					}
+					else 
+					{
+						if (buff_datint[j] > 0) printf("%i\n", buff_datint[j]);
+					}
+					*/
 				}
-				printf("%i\n", buff_datint[j]);
 				fwrite(buff_datint, sizeof(int)*ncxfin, 1, out);       /*!< Si es entero, escribe el buffer en el archivo de salida */
 			}
 		}	
 		if (ntype_raster == 2)
 		{
+			/**
+			* Escribe datos de cabecera
+			*/			
+			fprintf(out,"%s\n", buffer);
+			fprintf(out,"%i %i\n", buff_int[0], buff_int[1]);
+			fprintf(out,"%lf %lf\n", buff_double[0], buff_double[1]);
+			fprintf(out,"%lf %lf\n", buff_double[2], buff_double[3]);
+			fprintf(out,"%lf %lf\n", buff_double[4], buff_double[5]);
 			for (i=0;i<nfyfin;i++)
 			{
 				for(j=0;j<ncxfin;j++)
@@ -1108,7 +1296,7 @@ float  *buff_datdob;
 int i, j, ncxfin, nfyfin;
 FILE *out;
     
-	printf("Escribe raster generado %s\n", name_grd);		
+	printf("Write raster %s\n", name_grd);		
 	/**
 	* Captura valores para cabecera
 	*/
@@ -1172,14 +1360,28 @@ FILE *out;
 				for(j=0;j<ncxfin;j++)
 				{
 					buff_datdob[j] = (float)raster[i][j];                  /*!< Si es double, almacena toda la linea en un buffer */
-					//if(buff_datdob[j] != -9999)printf("%lf ",buff_datdob[j]);
+					/*
+					//TEST**********************************************
+					if (j <  ncxfin)
+					{	
+						if (buff_datdob[j] > 0) printf("%lf", buff_datdob[j]); 
+					}
+					else 
+					{
+						if (buff_datdob[j] > 0) printf("%lf\n", buff_datdob[j]);
+					}
+					*/
 				}
+
 				fwrite(buff_datdob, sizeof(float)*ncxfin, 1, out);     /*!< Si es double, escribe el buffer en el archivo de salida */
 				//printf("\n");
 			}
 		}
 		if (ntype_raster == 2)
 		{
+			/**
+			* Escribe datos de cabecera
+			*/
 			fprintf(out,"%s\n", buffer);
 			fprintf(out,"%i %i\n", buff_int[0], buff_int[1]);
 			fprintf(out,"%lf %lf\n", buff_double[0], buff_double[1]);
@@ -1257,3 +1459,11 @@ void free_Headraster(struct HeadR s_arrayh[], int num_rast)
 }
 
 #endif /* _LEEARR_H */
+
+
+
+
+/*!
+ * UPDATEs
+ * 2025/08/11: New read raster function for clip option
+ */

@@ -248,22 +248,36 @@ float ran_value;
 }
 
 /*! Calcula valor random float entre valor minimo y el valor maximo dado */
-float random_float(const float min, const float max)
+float random_float(float min, float max)
 {
-    srand(time(NULL));
-    if (max == min) return min;
-    else if (min < max) return (max - min) * ((float)rand() / RAND_MAX) + min;
-
-    // return 0 if min > max
-    return 0;
+	//ensure min <= max
+	if (min > max) 
+	{
+		float temp = min;
+		min = max;
+		max = temp;
+	}
+	// Generate a random number between 0.0 and 1.0
+	float random_normalized = (float)rand() / (float)RAND_MAX;
+	// Scale and shift the random number to the desired range
+	return random_normalized * (max - min) + min;
 }
 
-int get_randomI(int min_val, int max_val)
+int get_randomI(int min, int max)
 {
-int rand_value;
-	srand(time(NULL));
-	rand_value = min_val + rand() % (max_val - min_val);
-	return rand_value;
+	//ensure min <= max
+	if (min > max) 
+	{
+		float temp = min;
+		min = max;
+		max = temp;
+	}
+	// Calculate the size of the range
+    int range = max - min + 1;
+	// Use a robust method to generate a random number in the range
+	// rand() % range gives a number from 0 to (range - 1).
+	// Adding min shifts the result to the desired range.
+	return (rand() % range) + min;
 }
 
 

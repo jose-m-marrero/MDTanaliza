@@ -131,18 +131,18 @@ double txm, tym;
 }
 
 /*! Calculation of differential of topography */
-double calc_diff(double **raster, double orival, double destval, float dem_nulval, int idx_fy, int idx_cx, int typcal)
+double calc_diff(double **raster, double z_cell, double z_zlp, float dem_nulval, int idx_fy, int idx_cx, int typcal)
 {
 double diff_topo;
 	
 	diff_topo=0;
-	if(orival != dem_nulval)                                  
+	if(z_cell != dem_nulval)                                  
 	{
-		diff_topo = orival - destval;                                       /*!< Calc z diff between zlp and next cells */
+		diff_topo = z_cell - z_zlp;                                       /*!< Calc z diff between zlp and next cells */
 	}
 	else                                                                    /*!< If z value is null */
 	{
-		diff_topo = get_newzval(raster, dem_nulval, idx_fy, idx_cx, destval, typcal); /*!< Get z value from 8 cells if they are not null */
+		diff_topo = get_newzval(raster, dem_nulval, idx_fy, idx_cx, z_zlp, typcal); /*!< Get z value from 8 cells if they are not null */
 	}
 	return diff_topo;
 }
@@ -161,7 +161,7 @@ void central_topohazard(double **raster, struct HeadR s_arrayh[], float dem_nulv
 {
 int n, idx_fy, idx_cx;
 int count_loops, out_riberbed, cont_err, cont_fix, in_demlimit;
-double topo_bed, diff_topo;
+double z_cell, diff_topo;
 double p4x, p4y;
 int tot_idxcx, tot_idxfy;
 float raster_discre, crossdist;
@@ -221,8 +221,8 @@ float raster_discre, crossdist;
 			/*!< if we are far from bedriver */
 			if (out_riberbed == 0)
 			{
-				topo_bed  = raster[idx_fy][idx_cx];                                          /*!< Get new topo value */
-				diff_topo = calc_diff(raster, topo_bed, tzori, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
+				z_cell  = raster[idx_fy][idx_cx];                                          /*!< Get new topo value */
+				diff_topo = calc_diff(raster, z_cell, tzori, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
 				raster_topohaz[idx_fy][idx_cx] = diff_topo;
 			}
 			else raster_topohaz[idx_fy][idx_cx] = 0;
@@ -254,13 +254,13 @@ float raster_discre, crossdist;
  * OUT from mask's limits to the edge of the raster or defined distance
  * */
 void mask_topohazard(double **raster, int **mask, struct HeadR s_arrayh[], float dem_nulval, int mas_nulval, \
-		int idxfy, int idxcx, double txori, double tyori, double tzori, struct Zeropoint s_bedriver[], int n_bedxyz, \
+		int idxfy, int idxcx, double txori, double tyori, double tzori, struct Zeropoint s_zerolevpt[], int n_bedxyz, \
 		int nrio, double raddx, double raddy, int direc_calc, int direc_count, float topmax_dist)
 {
 int n, idx_fy, idx_cx;
 int count_loops, out_riberbed, count_out, cont_infix, cont_inerr, cont_outfix, cont_outerr, in_demlimit;
 int inmask_count, outmask_count, outlimask_count;
-double topo_bed, diff_topo;
+double z_cell, diff_topo;
 int tot_idxfy, tot_idxcx;
 float raster_discre, crossdist;
 double p4x, p4y;
@@ -324,7 +324,7 @@ double tzori_lim, txori_lim, tyori_lim;
 			/*!< if inside mask raster */
 			if  (mask_bed != -5555)                                 
 			{
-				//printf("L %i valmask %i  %lf \n", count_loops, mask_bed, topo_bed);
+				//printf("L %i valmask %i  %lf \n", count_loops, mask_bed, z_cell);
 				/*!< Is inside mask*/
 				if  (mask_bed != mas_nulval)    
 				{
@@ -333,7 +333,7 @@ double tzori_lim, txori_lim, tyori_lim;
 					if (count_loops < 10)
 					{
 						/*!< Check if new cell belong to the riberbed */
-						out_riberbed = check_ifriberbed(nrio, idx_fy, idx_cx, s_bedriver, n_bedxyz);
+						out_riberbed = check_ifriberbed(nrio, idx_fy, idx_cx, s_zerolevpt, n_bedxyz);
 					}
 					else out_riberbed = 0;
 					//printf("out_riberbed %i\n", out_riberbed);
@@ -341,8 +341,8 @@ double tzori_lim, txori_lim, tyori_lim;
 					/*!< if we are far from center */
 					if (out_riberbed == 0)
 					{
-						topo_bed  = raster[idx_fy][idx_cx];                                          /*!< Get new topo value */
-						diff_topo = calc_diff(raster, topo_bed, tzori, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
+						z_cell  = raster[idx_fy][idx_cx];                                          /*!< Get new topo value */
+						diff_topo = calc_diff(raster, z_cell, tzori, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
 						inhaz_topo[idx_fy][idx_cx]  = diff_topo;                                     /*!< Add diff topo to hazin */
 						outhaz_topo[idx_fy][idx_cx] = dem_nulval;                                    /*!< While in mask,  outmask is null */
 						inmask_count++;
@@ -357,16 +357,16 @@ double tzori_lim, txori_lim, tyori_lim;
 				if  (mask_bed == mas_nulval)   
 				{
 					//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-					topo_bed  = raster[idx_fy][idx_cx];                                             /*!< Get new topo value */
-					if(topo_bed != dem_nulval && tzori_lim == -9999)                                /*!< Get z in mask limit */
+					z_cell  = raster[idx_fy][idx_cx];                                             /*!< Get new topo value */
+					if(z_cell != dem_nulval && tzori_lim == -9999)                                /*!< Get z in mask limit */
 					{
 						/*!< get init values of mask limits */
-						tzori_lim = topo_bed;
+						tzori_lim = z_cell;
 						txori_lim = p4x;
 						tyori_lim = p4y;
 					}
 					
-					diff_topo = calc_diff(raster, topo_bed, tzori_lim, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
+					diff_topo = calc_diff(raster, z_cell, tzori_lim, dem_nulval, idx_fy, idx_cx, 2);  /*!< calc diff topo */
 					outhaz_topo[idx_fy][idx_cx] = diff_topo;                                         /*!< Add diff topo to hazout */
 					inhaz_topo[idx_fy][idx_cx]  = dem_nulval;                                        /*!< While out mask,  inmask is null */
 					outmask_count++;
@@ -376,8 +376,8 @@ double tzori_lim, txori_lim, tyori_lim;
 			if  (mask_bed == -5555 && tzori_lim  > 0) 
 			{
 				/*!< Continuous out of mask until end of DEM or max distand are reached */
-				topo_bed  = raster[idx_fy][idx_cx]; 
-				diff_topo = calc_diff(raster, topo_bed, tzori_lim, dem_nulval, idx_fy, idx_cx, 2);
+				z_cell  = raster[idx_fy][idx_cx]; 
+				diff_topo = calc_diff(raster, z_cell, tzori_lim, dem_nulval, idx_fy, idx_cx, 2);
 				outhaz_topo[idx_fy][idx_cx] = diff_topo;  
 				inhaz_topo[idx_fy][idx_cx]  = dem_nulval; 
 				outlimask_count++;
@@ -386,20 +386,20 @@ double tzori_lim, txori_lim, tyori_lim;
 			 * when no mask exist in some points */
 			if  (mask_bed == -5555 && tzori_lim  == -9999)
 			{
-				topo_bed  = raster[idx_fy][idx_cx];
-				if(topo_bed != dem_nulval && tzori_lim == -9999)                                      /*!< If z value is not null */
+				z_cell  = raster[idx_fy][idx_cx];
+				if(z_cell != dem_nulval && tzori_lim == -9999)                                      /*!< If z value is not null */
 				{
 					/*!< get init values of mask limits */
-					tzori_lim = topo_bed;
+					tzori_lim = z_cell;
 					txori_lim = p4x;
 					tyori_lim = p4y;
 				}
 				/*!< Continuous out of mask until end of DEM or max distand are reached */
-				diff_topo = calc_diff(raster, topo_bed, tzori, dem_nulval, idx_fy, idx_cx, 2);
+				diff_topo = calc_diff(raster, z_cell, tzori, dem_nulval, idx_fy, idx_cx, 2);
 				outhaz_topo[idx_fy][idx_cx] = diff_topo;  
 				inhaz_topo[idx_fy][idx_cx]  = dem_nulval;
 			}
-				//printf("loop %i count = %i in %lf  --  out %lf :: %lf %lf %lf\n", count_loops, count_out, inhaz_topo[idx_fy][idx_cx], outhaz_topo[idx_fy][idx_cx],  diff_topo, topo_bed, tzori_lim);			
+				//printf("loop %i count = %i in %lf  --  out %lf :: %lf %lf %lf\n", count_loops, count_out, inhaz_topo[idx_fy][idx_cx], outhaz_topo[idx_fy][idx_cx],  diff_topo, z_cell, tzori_lim);			
 			//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 			if (topmax_dist > 0 && count_out > 1) 
 			{
@@ -424,6 +424,75 @@ double tzori_lim, txori_lim, tyori_lim;
 	printf("-----------------------------------------------------------\n");
 }
 
+/*! Differential of topography by nearest point
+ * Calculation direction number 4
+ * Not well implement yet, working in progress
+ */
+void nearest_topohazard(double **raster, struct HeadR s_arrayh[], float dem_nulval, struct Zeropoint s_zerolevpt[], int n_zlps, int nrio)
+{
+int i, j, k;
+int brio; 
+//idxfy, idxcx;
+double x_zlp, y_zlp, z_zlp;
+double x_cell, y_cell, z_cell;
+double min_distance, dif_distance, endz_zlp;
+	/**
+	* Start topohazard calculation
+	*/	
+	for(i=0;i<s_arrayh[0].hn_fy;i++) //column
+	{
+		for(j=0;j<s_arrayh[0].hn_cx;j++) //row
+		{
+			/*!< if array index are in working area */
+			if((i>1 && i<s_arrayh[0].hn_fy-1 ) && ( j>1 && j<s_arrayh[0].hn_cx-1 ))
+			{
+				
+				z_cell  = raster[i][j];
+				/*!< get coordinates using from index */
+				x_cell = get_coor(s_arrayh[0].hxlo, s_arrayh[0].hresx, j);                       /*!< Calcula coordenada a partir de indice */
+				y_cell = get_coor(s_arrayh[0].hylo, s_arrayh[0].hresy, i);
+				
+				min_distance = 1000000000.0;
+				dif_distance = 0;
+				for(k=0;k<n_zlps;k++)
+				{
+					/*!< getting ZLP values */
+					brio  = s_zerolevpt[k].brio;
+					x_zlp = s_zerolevpt[k].bxcoor;                                   
+					y_zlp = s_zerolevpt[k].bycoor;
+					z_zlp = s_zerolevpt[k].bzcoor;
+					//idxfy = s_zerolevpt[k].bidxfy;
+					//idxcx =	s_zerolevpt[k].bidxcx;
+					
+					if (z_zlp != dem_nulval && brio  == nrio)
+					{
+						dif_distance = calc_dist(x_cell, x_zlp, y_cell, y_zlp);
+						/*!< while distance is lower every time, continuous
+						 * if distance increase, stop calculation */
+						//if (k > 0 && dif_distance > min_distance) break;
+						
+						if (dif_distance < min_distance)
+						{
+							endz_zlp = z_zlp;
+							min_distance = dif_distance;
+						}
+					}
+				}
+				
+				/*!< add differential */
+				raster_topohaz[i][j] = z_cell - endz_zlp;
+				
+				//printf("TEST: exit en k %i de n_zlps %i en %i %i totales %i %i con zdfi %lf de %lf\n", k, n_zlps, i, j, s_arrayh[0].hn_fy, s_arrayh[0].hn_cx, raster_topohaz[i][j], z_cell);
+			}
+		}
+		if (i == (int)(s_arrayh[0].hn_fy * 5) / 100) printf("5%% columns evaluated\n");
+		if (i == (int)(s_arrayh[0].hn_fy * 10) / 100) printf("10%% columns evaluated\n");
+		if (i == (int)(s_arrayh[0].hn_fy * 25) / 100) printf("25%% columns evaluated\n");
+		if (i == (int)(s_arrayh[0].hn_fy * 50) / 100) printf("50%% columns evaluated\n");
+		if (i == (int)(s_arrayh[0].hn_fy * 75) / 100) printf("75%% columns evaluated\n");
+		if (i == (int)(s_arrayh[0].hn_fy * 90) / 100) printf("90%% columns evaluated\n");
+	}
+}
 
 
 #endif /* _TOPO_RAS */

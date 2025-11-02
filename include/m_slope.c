@@ -112,7 +112,7 @@ double **rast_degree, **rast_porcen, **rast_class;
 				if(c5 != dem_nulval)                                    /*!< if z coordinate value is not null */
 				{                 
 					//getmovingcell(i, j, 0);                                /*!< get 3x3 moving cell z values */
-					cellsval = busca_celproxF(raster, i, j);
+					cellsval = search_celproxF(raster, i, j);
 					c6 = cellsval[0];   //d - 6
 					c4 = cellsval[1];
 					c8 = cellsval[2];

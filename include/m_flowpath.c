@@ -353,7 +353,7 @@ void fifo_load(int indyf, int indxc)
  * for_inter 0 paths are calculated as individual
  * for_inter 1 previous path are considered to calculate the new one */
 void calc_singflow(int nflow, const char *dir_out, const char *namfile, const char *namxyven, double **raster, struct HeadR s_arrayh[], \
-	float dem_nulval, int indyf, int indxc, double txori, double tyori, double tzori, int flow_mode, float max_dist, \
+	float dem_nulval, int indyf, int indxc, int ptid, double txori, double tyori, double tzori, int flow_mode, float max_dist, \
 	float cri_heig, float heig_add, int num_repit, int for_inter, int dist_type)
 {	
 int i, j, k, n_gflowpath, n, o, maxbdpt, ext, out;
@@ -394,8 +394,8 @@ int *flowval;
 		//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 		//printf("height, %lf\n", raster[idx_fy][idx_xc]);
 		newheight = increas_critheight(cri_heig, hl2, raster, idx_fy, idx_xc);  /*!< Calc new altitud in the new position increasing its value */
-		topoval   = busca_celproxF(raster, idx_fy, idx_xc);               /*!< Get 8 cels value in DEM */  
-		flowval   = busca_celproxI(raster_control, idx_fy, idx_xc);       /*!< Get 8 cels value in Flow-control rater */
+		topoval   = search_celproxF(raster, idx_fy, idx_xc);               /*!< Get 8 cels value in DEM */  
+		flowval   = search_celproxI(raster_control, idx_fy, idx_xc);       /*!< Get 8 cels value in Flow-control rater */
 		//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 		for (k=0;k<8;k++)
 		{
@@ -462,7 +462,7 @@ int *flowval;
 				*/
 				s_zerolevpt[n_gflowpath].bjerar  = 1;
 				s_zerolevpt[n_gflowpath].brio    = nflow;
-				s_zerolevpt[n_gflowpath].btramo  = 0;
+				s_zerolevpt[n_gflowpath].btramo  = ptid;
 				s_zerolevpt[n_gflowpath].bidpt   = n_gflowpath; 
 				if(n_gflowpath == 0)s_zerolevpt[n_gflowpath].bdist = 0;
 				if(n_gflowpath >  0)s_zerolevpt[n_gflowpath].bdist = s_zerolevpt[n_gflowpath-1].bdist + distpt;
@@ -565,7 +565,7 @@ void calc_drunksailflow(double **raster, struct HeadR s_arrayh[], \
 	float dem_nulval, int indyf, int indxc, double txori, double tyori, double tzori, float max_dist, int num_itera, \
 	int num_repit, float radiu_val, float cri_heig, float heig_add, int for_inter, int dist_type)
 {
-int i, j, l, m, q, o;
+int i, l, m, q, o;
 int cr, cn;
 int limext; 
 int n_gflowpath, limpass, rep;
@@ -632,6 +632,7 @@ double dist_2d, diff_he, dist_3d;
 		/**
 		* Check if indexs are in DEM
 		*/
+		//printf("TEST: fy %i xc %i :: %lf %lf\n", idx_fy, idx_xc, min_indyf, max_indyf);
 		if(idx_fy<5||idx_fy>ras_fy-5||idx_xc<5||idx_xc>ras_cx-5)done=0;
 		else
 		{
@@ -663,7 +664,7 @@ double dist_2d, diff_he, dist_3d;
 						/**
 						* find 8 cells
 						*/
-						topoval = busca_celproxF(raster, idx_fy, idx_xc);       /*!< get 3x3 moving cell z values */
+						topoval = search_celproxF(raster, idx_fy, idx_xc);       /*!< get 3x3 moving cell z values */
 						sum     = 0;                                            /*!< reset sum var */
 						sumtopo = h0;
 						okval   = 1;                                   
@@ -790,7 +791,7 @@ double dist_2d, diff_he, dist_3d;
 					}	
 					else
 					{
-						/*!< Count new cells in m, */
+						/*!< Count new cells in m
 						if(for_inter == 0 && heig_add  > 0) 
 						{
 							if(raster_control[idx_fy][idx_xc]==0)m++;
@@ -805,7 +806,8 @@ double dist_2d, diff_he, dist_3d;
 							{
 								if(raster_path[idx_fy][idx_xc]==0)m++;
 							}
-						}										
+						}
+						*/									
 						raster_path[idx_fy][idx_xc]   += 1;							/*!< sum 1 to the cell */
 						raster_control[idx_fy][idx_xc] = 1;                                    /*!< Control raster */
 						//rast3[i][j] ++;                                     /*!< sum 1 to the cell */
@@ -831,11 +833,7 @@ double dist_2d, diff_he, dist_3d;
 						if (dist_type == 2) ll = dist_3d;
 						if (dist_type == 3) ll = n_gflowpath * s_arrayh[0].hresx;  /*!< Calc cell distance based on number of cells covered */
 						
-						
-						
-						
-						
-						
+
 						ll = sqrt((tx-txori)*(tx-txori)+(ty-tyori)*(ty-tyori));         /*!< Calc distance from init */
 						if(ll>max_dist)                                     /*!< Check if distance is higher than permitted */
 						{
@@ -851,7 +849,7 @@ double dist_2d, diff_he, dist_3d;
 						{
 							if(ocupcell[n_gflowpath-2][0] == idx_fy && ocupcell[n_gflowpath-2][1] == idx_fy) rep++;   /*!< Check if cell has been selected recently */
 							
-							if(rep > num_repit)                                  /*!< if cell has been selected recently more than 1000 times */
+							if(rep > num_repit)                                  /*!< if cell has been selected recently more than N times */
 							{ 
 								nowayout++;
 								done = 4;                                   /*!< if yes then done=4 - exit second loop */
@@ -877,6 +875,7 @@ double dist_2d, diff_he, dist_3d;
 				n_attem++;   
 			}	
 			nitera_done++;                                              /*!< Add new iteration */ 
+			//printf("TEST: nitera %i done %i: %i %i\n",  nitera_done, done, idx_fy, idx_xc);
 		} 
 		/**
 		 * Done = 0 Continuous the calculation
@@ -894,6 +893,7 @@ double dist_2d, diff_he, dist_3d;
 	*/                                         
     printf("Total cells selected per flow path %i\n", m);
 	printf("Total sinks found %i\n", o);
+	printf("Total interactions %i\n", num_itera);
 	printf("Total number of times that max distance was reached %i\n", maxd_reach);
 	printf("Total number of times that max step was reached %i\n", step_reach);
 	printf("Total number of times without exit %i\n", nowayout);
@@ -903,14 +903,6 @@ double dist_2d, diff_he, dist_3d;
     /*!< If force interacction is equal to 0 means, no interaction will be taken
 	 * each flow-paht will follow the main route without taken into accout other simulated paths
 	 * To do that, we must to reset the raster_control */
-	if(for_inter == 0)
-	{
-		for(i=0;i<s_arrayh[0].hn_fy;i++) 
-		{
-			for(j=0;j<s_arrayh[0].hn_cx;j++)raster_control[i][j] = 0;
-		}
-		
-	}
 }
 
 
@@ -977,7 +969,7 @@ double tx, ty;
 			{
 				okdif   = 0;
 				sumdif  = 0.0;
-				topoval = busca_celproxF(raster, idx_fy, idx_xc);
+				topoval = search_celproxF(raster, idx_fy, idx_xc);
 				for(l=0;l<8;l++)
 				{
 					if (topoval[l] != dem_nulval)                       /*!< if z is a right value */

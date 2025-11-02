@@ -154,7 +154,8 @@ char* get_exten(char* glob_namfile)
 	}
 }
 
-/*! ELIMINA EXTENSION DEL ARCHIVO */
+/*! ELIMINA EXTENSION DEL ARCHIVO
+ * Requiere solo nombre de archivo sin path */
 char* remove_extension(const char* glob_namfile)
 {
 int i, size, nstr, ndot, endot, posdot[10];

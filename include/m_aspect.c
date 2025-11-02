@@ -93,7 +93,7 @@ double c1,c2,c3,c4,c6,c7,c8,c9;
 				h0  = raster[i][j];                                     /*!< Get center cell z value  */
 				if(h0 != dem_nulval)                                    /*!< if z coordinate value is not null */     
 				{
-					cellsval = busca_celproxF(raster, i, j);
+					cellsval = search_celproxF(raster, i, j);
 					//getmovingcell(i, j, 0);                    			/*!< get 3x3 moving cell z values */
 					for (k=0;k<8;k++)
 					{
