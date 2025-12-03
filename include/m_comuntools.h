@@ -12,9 +12,9 @@
 * Autores: Jose M. Marrero 
 *          Hugo Yepes
 * 
-* Version: 0.1.1
+* Version: 0.1.11
 * Creation Date: 2018-04-06
-* Last update: 2025-02-18
+* Last update: 2025-12-03
 * 
 * Description:
 * 
@@ -131,7 +131,7 @@ double *topoval, sumcell, topo_cells[8], diff_topo, max_val;
 	{
 		if (topoval[l] != dem_nulval)                    /*!< if z valuels is not null */
 		{
-			if (abs(topoval[l]-max_val) < 100)           /*!< avoid error values with anormal zvalues */
+			if (fabs(topoval[l]-max_val) < 100)           /*!< avoid error values with anormal zvalues */
 			{
 				topo_cells[cont_topo] = topoval[l];                   
 				sumcell += topoval[l]; 
@@ -434,14 +434,14 @@ double tdist, tz, new_zcoor, diff_coor;
 		if (tdist > 50)
 		{
 			/*!< Check difference with pre */
-			diff_coor = abs(tz - s_zerolevpt[i-1].bzcoor);
+			diff_coor = fabs(tz - s_zerolevpt[i-1].bzcoor);
 			if (diff_coor > xyz_zdist)
 			{
 				detc=1;
 				/*!< Check difference between pre and post if not null */
 				if (s_zerolevpt[i+1].bzcoor != dem_nulval && s_zerolevpt[i-1].bzcoor != dem_nulval)
 				{
-					diff_coor = abs(s_zerolevpt[i+1].bzcoor - s_zerolevpt[i-1].bzcoor);
+					diff_coor = fabs(s_zerolevpt[i+1].bzcoor - s_zerolevpt[i-1].bzcoor);
 					if (diff_coor < xyz_zdist)  typfix = 2;
 					else 
 					{
@@ -924,3 +924,8 @@ double max,sumtot,volum, value;
 }
 
 #endif /* _COM_RAS */
+
+/*!
+ * UPDATEs
+ * 2025/12/03: changed abs by fabs function to avoid compilation issues
+ */
