@@ -11,9 +11,9 @@
 * 
 * Author: Jose M. Marrero 
 * 
-* Version: 0.1.1
+* Version: 0.1.11
 * Creation Date: 2018-04-06
-* Last update: 2025-02-19
+* Last update: 2025-12-03
 * 
 * Description:
 * 
@@ -477,7 +477,7 @@ int *flowval;
 				//ll = sqrt((tx-txori)*(tx-txori)+(ty-tyori)*(ty-tyori));              /*!< Calc distance from cell to init cell */
 				
 				dist_2d = calc_dist(tx, txori, ty, tyori);                /*!< Calc 2d distance to init */ 
-				diff_he = abs(tzori - tz);                                /*!< Calc height difference to init */
+				diff_he = fabs(tzori - tz);                                /*!< Calc height difference to init */
 				dist_3d = calc_hipo(dist_2d, diff_he);                    /*!< Calc 3d distance to init */ 
 				
 				if (dist_type == 1) ll = dist_2d;
@@ -826,7 +826,7 @@ double dist_2d, diff_he, dist_3d;
 						
 						
 						dist_2d = calc_dist(tx, txori, ty, tyori);                /*!< Calc 2d distance to init */ 
-						diff_he = abs(tzori - tzori);                                /*!< Calc height difference to init */
+						diff_he = fabs(tzori - tzori);                                /*!< Calc height difference to init */
 						dist_3d = calc_hipo(dist_2d, diff_he);                    /*!< Calc 3d distance to init */ 
 						
 						if (dist_type == 1) ll = dist_2d;
@@ -1052,7 +1052,7 @@ double tx, ty;
 							ty = get_coor(s_arrayh[0].hylo, s_arrayh[0].hresy, nwfy);
 							
 							dist_2d = calc_dist(tx, txori, ty, tyori);                /*!< Calc 2d distance to init */ 
-							diff_he = abs(tzori - h0);                                /*!< Calc height difference to init */
+							diff_he = fabs(tzori - h0);                                /*!< Calc height difference to init */
 							dist_3d = calc_hipo(dist_2d, diff_he);                    /*!< Calc 3d distance to init */ 
 							
 							if (dist_type == 1) ll = dist_2d;
@@ -1085,3 +1085,8 @@ double tx, ty;
 
 
 #endif /* _FLO_RAS */
+
+/*!
+ * UPDATEs
+ * 2025/12/03: changed abs by fabs function to avoid compilation issues
+ */
