@@ -11,9 +11,9 @@
 * Author: Jose M. Marrero, Ramon Ortiz.
 * 	Code improved following Internet examples
 * 
-* Version: 0.1.1
+* Version: 0.1.2
 * Creation Date: 2019-11-01
-* Last update: 2025-08-11
+* Last update: 2025-12-03
 * 
 * Description: 
 * 
@@ -1017,8 +1017,6 @@ double **raster;
 }
 
 
-
-
 /*! Read ASCII or Binary double-float *grd raster in clip mode
  * ntype_raster: Raster type must be defined (1-binary 2-ASCII)
  * Other inputs parameters: raster name, null value and maximum and minimum valid data
@@ -1030,14 +1028,16 @@ double **read_grdrasterF_clip(const char *name_grd, float grdnul, float grdmin, 
 FILE *in;
 float datofl[4];
 double dato, datfin;
-int i, j, contnul, contgod, i_clip, j_clip;
+int i, j, contnul, contgod;
 //int nyfilas, nxcolum;
 double resolx, resoly;
 //struct HeadR array_headF;
 double **raster;
+//clip
 int big_ncx, big_nfy;
 double big_xlow, big_xhig, big_ylow, big_yhig;
-int valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max;
+int col_min_clip, col_max_clip, row_min_clip, row_max_clip, clip_ncx, clip_nfy;
+	
 	printf("\n***Lectura archivo grd and CLIP, %s ***\n", name_grd);
 	printf("Tipo raster %i\n", ntype_raster);
 	if((in=fopen(name_grd,"rb"))==NULL)
@@ -1052,6 +1052,9 @@ int valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max;
 	}
 	else
 	{
+		/**
+		* reading input raster header
+		*/
 		if (ntype_raster == 1)
 		{
 			read_headerB(s_arrayh, num_rast, in);
@@ -1061,7 +1064,7 @@ int valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max;
 			read_headerA(s_arrayh, num_rast, in);
 		}
 		/**
-		* Creating array and calculating new values
+		* Calculating new clip-raster dimension
 		*/
 		//resolution remain the same
 		resolx  = s_arrayh[num_rast].hresx;
@@ -1074,71 +1077,94 @@ int valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max;
 		big_ylow = s_arrayh[num_rast].hylo;          /*! minimum y-coordinate */
 		big_yhig = s_arrayh[num_rast].hyhi;          /*! maximum y-coordinate */
 		printf("Calculating new clip header \n");
-		//colums and rows of clip: distance / resolution
-		s_arrayh[num_rast].hn_fy = 1 + (int)((clip_yhig - clip_ylow) / s_arrayh[num_rast].hresy);
-		s_arrayh[num_rast].hn_cx = 1 + (int)((clip_xhig - clip_xlow) / s_arrayh[num_rast].hresx);
-		//nyfilas = s_arrayh[num_rast].hn_fy;
-		//nxcolum = s_arrayh[num_rast].hn_cx;
-		//limits of valid data: distance in columns and rows between big and clip
-		valid_limcx_min = (int)((clip_xlow - big_xlow) / s_arrayh[num_rast].hresx); // 0 + X = new 0
-		valid_limcx_max = big_ncx - ((int)((big_xhig - clip_xhig) / s_arrayh[num_rast].hresx)); //from X to max
-		valid_limfy_min = (int)((clip_ylow - big_ylow) / s_arrayh[num_rast].hresy);
-		valid_limfy_max = big_nfy - ((int)((big_yhig - clip_yhig) / s_arrayh[num_rast].hresy));
-		//adjust columns and rows
-		if (s_arrayh[num_rast].hn_cx < (valid_limcx_max - valid_limcx_min)) s_arrayh[num_rast].hn_cx = valid_limcx_max- valid_limcx_min;
-		if (s_arrayh[num_rast].hn_fy < (valid_limfy_max - valid_limfy_min)) s_arrayh[num_rast].hn_fy = valid_limfy_max- valid_limfy_min;
-		//readjust coordinates to clip dimension based on indexes
-		s_arrayh[num_rast].hxlo = big_xlow + (valid_limcx_min * resolx);
-		s_arrayh[num_rast].hxhi = big_xlow + (valid_limcx_max * resolx);
-		s_arrayh[num_rast].hylo = big_ylow + (valid_limfy_min * resoly);
-		s_arrayh[num_rast].hyhi = big_ylow + (valid_limfy_max * resoly);
-		printf("Creando clip array \n");
-		contnul=0;
-		contgod=0;
-		
+		//**************************************************************
+		// check if xy clip-raster limits exceed big-raster dimension */
+		if (clip_xlow < big_xlow) clip_xlow = big_xlow;
+		if (clip_xhig > big_xhig) clip_xhig = big_xhig;
+		if (clip_ylow < big_ylow) clip_ylow = big_ylow;
+		if (clip_yhig > big_yhig) clip_yhig = big_yhig;
+		// calc clip-raster indexes
+		col_min_clip = (int)((clip_xlow - big_xlow) / resolx);
+		col_max_clip = (int)((clip_xhig - big_xlow) / resolx);
+		row_min_clip = (int)((clip_ylow - big_ylow) / resoly);
+		row_max_clip = (int)((clip_yhig - big_ylow) / resoly);
+		// check if clip-raste indexes exceed big-raster dimension
+		if (col_min_clip < 0) col_min_clip = 0;
+		if (row_min_clip < 0) row_min_clip = 0;
+		if (col_max_clip >= big_ncx) col_max_clip = big_ncx - 1;
+		if (row_max_clip >= big_nfy) row_max_clip = big_nfy - 1;
+		// calc total columns and rows of clip-raster
+		clip_ncx = col_max_clip - col_min_clip + 1;
+		clip_nfy = row_max_clip - row_min_clip + 1;
+		// Update clip-raster header
+		s_arrayh[num_rast].hn_cx = clip_ncx;
+		s_arrayh[num_rast].hn_fy = clip_nfy;
+		s_arrayh[num_rast].hxlo  = big_xlow + col_min_clip * resolx;
+		s_arrayh[num_rast].hxhi  = s_arrayh[num_rast].hxlo + (clip_ncx - 1) * resolx;
+		s_arrayh[num_rast].hylo  = big_ylow + row_min_clip * resoly;
+		s_arrayh[num_rast].hyhi  = s_arrayh[num_rast].hylo + (clip_nfy - 1) * resoly;
+		//**************************************************************
+		printf("New clip header \n");
 		printf("array dimension and resolution %i %i %lf %lf\n", s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx, resolx, resoly);
 		printf("Valid data interval: %f - %f, both included\n", grdmin, grdmax);
-		printf("Valid cell limits: big %i %i clip %i %i - %i %i  %i %i \n", big_ncx, big_nfy, s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx, \
-			valid_limcx_min, valid_limcx_max, valid_limfy_min, valid_limfy_max);
-		raster = Crea_2DFarray(s_arrayh[num_rast].hn_fy, s_arrayh[num_rast].hn_cx);
-		i_clip = 0;
+		printf("Big-raster dimension: ncx %i nfy %i Clip-raster dimesinon: ncx %i nfy %i\n", big_ncx, big_nfy, clip_ncx, clip_nfy);
+		printf("Clip limits: col %i %i row  %i %i\n", col_min_clip, row_max_clip, row_min_clip, row_max_clip);
+		//**************************************************************
+		printf("Creando clip array \n");
+		raster = Crea_2DFarray(clip_nfy, clip_ncx);
+		//**************************************************************
+		/**
+		* adding valid values to the new clip-raster
+		*/
+		contnul=0;
+		contgod=0;
+		//read big-raster
 		for(i=0;i<big_nfy;i++) //rows of big array
 		{
-			j_clip=0;
 			for(j=0;j<big_ncx;j++) //columns of big array
 			{
 				//read each data
 				if (ntype_raster == 1) 
 				{
-					fread(&datofl,sizeof(float),1,in);                      /*!< Lee *.grd en formato binario */
-					datfin = datofl[0];
+					if (fread(&datofl[0], sizeof(float), 1, in) != 1)   /*!< reading *.grd in binary format */
+					{
+						printf("Error reading data\n");
+						exit(0);
+					}    
+					dato = (double)datofl[0];
 				}
 				if (ntype_raster == 2) 
 				{
-					fscanf(in,"%lf", &dato);                                /*!< Lee *.grd en formato ASCII */
-					datfin = dato;
+					if (fscanf(in, "%lf", &dato) != 1)                  /*!< reading *.grd in ASCII format */
+					{
+						printf("Error reading ASCII data\n");   
+						exit(0);
+					}
+					//fscanf(in,"%lf", &dato);
 				}
+				datfin = dato;
+				
 				//check if data is in limits
-				if((datfin > grdmax) || (datfin < grdmin))                 /*!< Evalua si el valor esta dentro de los limites definidos */
+				if((datfin > grdmax) || (datfin < grdmin))              /*!< check if cell value is within limits */
 				{
-					datfin = grdnul;                                        /*!< Se asigna valor nulo si esta fuera de los limites */
-					contnul+=1;
+					datfin = grdnul;                                    /*!< add null value if not */
+					contnul++;
 				}
-				else  contgod +=1;
+				else  contgod ++;
 				//when data are saved in clipped array
 				
-				/*! if index i is in in clip area */
-				if ((i > valid_limfy_min && i < valid_limfy_max) && (j > valid_limcx_min && j < valid_limcx_max))
+				/*! if cell is within clip-raster limits add value */
+				if ((i >= row_min_clip && i <= row_max_clip) && (j >= col_min_clip && j < col_max_clip))
 				{
+					int i_clip = i - row_min_clip;
+					int j_clip = j - col_min_clip; 
 					raster[i_clip][j_clip]  = datfin;
 					//printf("dat %lf : big %i %i : clip i %i j %i\n", datfin, i, j, i_clip, j_clip);
-					j_clip++;
 				}
 			}
-			if (i > valid_limfy_min && i < valid_limfy_max)	i_clip++;                              
-		}     
+		}
 		fclose(in);
-		printf("datos temp entrada: %f %f %f %i %i cont: %i %i Dim %lf %lf\n", grdnul, grdmin, grdmax, ntype_raster, num_rast, contnul, contgod, resoly, resolx);
+		printf("Input raster parameters: %f %f %f %i %i cont: %i %i Dim %lf %lf\n", grdnul, grdmin, grdmax, ntype_raster, num_rast, contnul, contgod, resoly, resolx);
 		
 		/**
 		* Print header again
@@ -1465,5 +1491,6 @@ void free_Headraster(struct HeadR s_arrayh[], int num_rast)
 
 /*!
  * UPDATEs
+ * 2025/12/03: Update clip function based on IA recommendation to solve raster dimension
  * 2025/08/11: New read raster function for clip option
  */
