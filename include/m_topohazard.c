@@ -108,8 +108,8 @@ double txm, tym;
 	if(tym > s_arrayh[1].hylo && tym <= s_arrayh[1].hyhi && txm > s_arrayh[1].hxlo && txm <= s_arrayh[1].hxhi)
 	{
 		/*!< get index from coordinates over mask raster*/
-		idxm_fy = fabs(calc_Rindex(tym, s_arrayh[1].hylo, s_arrayh[1].hresy));
-		idxm_cx = fabs(calc_Rindex(txm, s_arrayh[1].hxlo, s_arrayh[1].hresx));
+		idxm_fy = abs(calc_Rindex(tym, s_arrayh[1].hylo, s_arrayh[1].hresy));
+		idxm_cx = abs(calc_Rindex(txm, s_arrayh[1].hxlo, s_arrayh[1].hresx));
 		//txm2 = get_coor(s_arrayh[1].hxlo, s_arrayh[1].hresx, idxm_cx);
 		//tym2 = get_coor(s_arrayh[1].hylo, s_arrayh[1].hresy, idxm_fy);
 		
