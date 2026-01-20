@@ -412,7 +412,7 @@ static double datos[2];
 					dsm_val = Fraster[vrow][vcol];                         /*!< Get z value from DSM */
 					if (dsm_val != grdnull || dsm_val > 0)                 /*!< If z value is ok */
 					{
-						diff_height = abs(dsm_val - height_feature);                      /*!< Calculate height difference (street - roof), its feature's height */
+						diff_height = fabs(dsm_val - height_feature);                      /*!< Calculate height difference (street - roof), its feature's height */
 						if (diff_height >= min_height && diff_height <= max_hieght)       /*!< if difference is less than .. or higher than ... ok */
 						{
 							new_height = dsm_val;
