@@ -47,7 +47,7 @@
 /*! 
 * Almacena datos de cabecera, el numero de arrays se define en el main
 ***********************************************************************/
-#include "struct_array-cabecera.h"
+#include "struct_head-array.h"
 /*! 
 * Calculos geometricos, aritmetricos y comparaciones de datos
 ***********************************************************************/
