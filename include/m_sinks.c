@@ -187,7 +187,7 @@ double c1,c2,c3,c4,c6,c7,c8,c9; //c5 is h0
 						cellsval = search_celproxF(raster, i, j);
 						for (k=0;k<8;k++)
 						{
-							celldif[k] = fabsf(h0 - cellsval[k]);
+							celldif[k] = fabs(h0 - cellsval[k]);
 							if (celldif[k] > (2 * s_arrayh[0].hresx)) highdif++;
 						} 
 						result = calc_higlow(h0, cellsval);
