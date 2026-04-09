@@ -1269,7 +1269,7 @@ double *rectaval;
 				{
 					s_trajectory[n_zerolevtr].ridx    = n_zerolevtr;
 					s_trajectory[n_zerolevtr].rid     = n_zerolevtr+1;
-					s_trajectory[n_zerolevtr].rnio    = trioini;
+					s_trajectory[n_zerolevtr].rnio    = trio;
 					//-----
 					//s_zerolevpt[i].bjerar   = n_zerolevtr+1;
 					/*!< reset values  */
